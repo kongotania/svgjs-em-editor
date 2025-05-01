@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Modeling Application</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- SVG.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/3.1.2/svg.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@svgdotjs/svg.draggable.js/dist/svg.draggable.min.js"></script>
+
+</head>
+<body>
+    <div class="app-container">
+        <!-- Left sidebar with palette of elements -->
+        <div class="palette">
+            <h2>Elements</h2>
+            <div class="palette-item" data-type="event" draggable="true">
+                <div class="element-preview event"></div>
+                <span>Event</span>
+            </div>
+            <div class="palette-item" data-type="external-event" draggable="true">
+                <div class="element-preview external-event"></div>
+                <span>External Event</span>
+            </div>
+            <div class="palette-item" data-type="command" draggable="true">
+                <div class="element-preview command"></div>
+                <span>Command</span>
+            </div>
+            <div class="palette-item" data-type="read-model" draggable="true">
+                <div class="element-preview read-model"></div>
+                <span>Read Model</span>
+            </div>
+            <div class="palette-item" data-type="comment" draggable="true">
+                <div class="element-preview comment"></div>
+                <span>Comment</span>
+            </div>
+            <div class="palette-item" data-type="processor" draggable="true">
+                <div class="element-preview processor">⚙️</div>
+                <span>Processor</span>
+            </div>
+            <div class="palette-item" data-type="gui" draggable="true">
+                <div class="element-preview gui">🖥️</div>
+                <span>GUI</span>
+            </div>
+            <div class="palette-item" data-type="slice" draggable="true">
+                <div class="element-preview slice"></div>
+                <span>Slice</span>
+            </div>
+        </div>
+
+        <!-- Main workspace area -->
+        <div class="workspace">
+            <!-- Controls for zooming -->
+            <div class="controls">
+                <button id="zoom-in">+</button>
+                <button id="zoom-out">-</button>
+                <button id="reset-view">Reset</button>
+            </div>
+            
+            <!-- SVG drawing area -->
+            <div id="drawing-area"></div>
+        </div>
+    </div>
+
+    <!-- Context menu for selected elements -->
+    <div id="context-menu" class="context-menu">
+        <button id="delete-element" class="context-menu-item">🗑️ Delete</button>
+        <button id="connect-element" class="context-menu-item">➡️ Connect</button>
+        <button id="edit-properties" class="context-menu-item">🔧 Properties</button>
+    </div>
+
+    <!-- Name editor popup -->
+    <div id="name-editor" class="name-editor">
+        <input type="text" id="element-name-input">
+        <button id="save-name">Save</button>
+    </div>
+
+    <!-- Load JavaScript files -->
+    <script src="js/elements.js"></script>
+    <script src="js/connections.js"></script>
+    <script src="js/interactions.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
