@@ -53,7 +53,7 @@ class Element {
         this.connections = [];
         this.width = ELEMENT_SIZES.WIDTH;
         this.height = ELEMENT_SIZES.HEIGHT;
-        
+
         // Special case for slices
         if (type === ELEMENT_TYPES.SLICE) {
             this.width = ELEMENT_SIZES.SLICE_WIDTH;
@@ -71,12 +71,12 @@ class Element {
         if (this.type === ELEMENT_TYPES.SLICE || otherElement.type === ELEMENT_TYPES.SLICE) {
             return false;
         }
-        
+
         // Check for overlap
         return !(
-            this.x + this.width < otherElement.x || 
-            this.x > otherElement.x + otherElement.width || 
-            this.y + this.height < otherElement.y || 
+            this.x + this.width < otherElement.x ||
+            this.x > otherElement.x + otherElement.width ||
+            this.y + this.height < otherElement.y ||
             this.y > otherElement.y + otherElement.height
         );
     }
@@ -102,19 +102,19 @@ class Element {
     findBestConnectionPoint(targetElement) {
         const sourcePoints = this.getConnectionPoints();
         const targetPoints = targetElement.getConnectionPoints();
-        
+
         // Calculate distances between all possible connection points
         let minDistance = Infinity;
         let bestSourcePoint = null;
         let bestTargetPoint = null;
-        
+
         for (const [sourceSide, sourcePoint] of Object.entries(sourcePoints)) {
             for (const [targetSide, targetPoint] of Object.entries(targetPoints)) {
                 const distance = Math.sqrt(
-                    Math.pow(sourcePoint.x - targetPoint.x, 2) + 
+                    Math.pow(sourcePoint.x - targetPoint.x, 2) +
                     Math.pow(sourcePoint.y - targetPoint.y, 2)
                 );
-                
+
                 if (distance < minDistance) {
                     minDistance = distance;
                     bestSourcePoint = { ...sourcePoint, side: sourceSide };
@@ -122,7 +122,7 @@ class Element {
                 }
             }
         }
-        
+
         return { source: bestSourcePoint, target: bestTargetPoint };
     }
 
@@ -131,9 +131,9 @@ class Element {
      * @param {SVG.Container} canvas - The SVG canvas to draw on
      * @returns {SVG.Group} - The SVG group containing the element
      */
-    createSVG(canvas) {
+    createSVG(canvas, interactionManager) {
         const group = canvas.group().attr('id', this.id).addClass('element');
-        
+
         // Create the element rectangle
         const rect = group.rect(this.width, this.height)
             .attr({
@@ -142,7 +142,7 @@ class Element {
                 ry: 5
             })
             .addClass('element-rect');
-        
+
         // For Processor and GUI, add an icon
         if (this.type === ELEMENT_TYPES.PROCESSOR) {
             group.text('⚙️')
@@ -153,16 +153,16 @@ class Element {
                 .font({ size: 20 })
                 .center(this.width / 2, this.height / 2);
         }
-        
+
         // Add text for the name
         const text = group.text(this.name || this.type)
             .font({ size: 12, family: 'Arial', anchor: 'middle' })
             .center(this.width / 2, this.height / 2)
             .addClass('element-text');
-        
+
         // Position the group at the element's coordinates
         group.move(this.x, this.y);
-        
+
         // For slices, make the rect transparent with a dashed border
         if (this.type === ELEMENT_TYPES.SLICE) {
             rect.attr({
@@ -171,7 +171,58 @@ class Element {
                 stroke: '#888'
             });
         }
-        
+        // --- ADD DRAGGABLE LOGIC ---
+        group.draggable().on('dragstart.namespace', (e) => {
+            e.preventDefault(); // Prevent browser default drag behavior
+
+            // Store reference to the element being dragged
+            interactionManager.currentDraggingElement = this;
+
+            group.addClass('dragging'); // Add visual feedback
+            interactionManager.hideContextMenu(); // Hide context menu during drag
+        }).on('dragmove.namespace', (e) => {
+            e.preventDefault();
+            const { handler, box } = e.detail;
+
+            // Update the element's internal coordinates
+            // Note: box.x, box.y are the new coordinates after the drag move
+            this.x = box.x;
+            this.y = box.y;
+
+            // Move the SVG group itself (redundant IF draggable does it, but safe)
+            handler.move(box.x, box.y); // Draggable plugin usually handles this
+
+            // Update connections attached to this element
+            // We need access to the connectionManager here!
+            // Pass interactionManager -> connectionManager
+            interactionManager.connectionManager.updateConnectionsForElement(this);
+
+        }).on('dragend.namespace', (e) => {
+            e.preventDefault();
+            const { handler, box } = e.detail;
+
+            group.removeClass('dragging'); // Remove visual feedback
+
+            // Update final position (might be redundant if dragmove updated)
+            this.x = box.x;
+            this.y = box.y;
+
+            // Clear the reference
+            interactionManager.currentDraggingElement = null;
+
+            // Optional: Check if it was a "click" (minimal movement)
+            // This might be needed if regular click events are suppressed.
+            // Example check (needs refinement):
+            // const dx = box.x - initialX; // Need to store initialX on dragstart
+            // const dy = box.y - initialY; // Need to store initialY on dragstart
+            // if (Math.sqrt(dx*dx + dy*dy) < interactionManager.dragThreshold) {
+            //      interactionManager.selectElement(this);
+            //      interactionManager.showContextMenu(e.clientX, e.clientY); // Need clientX/Y from event
+            // }
+
+        });
+        // --- END OF DRAGGABLE LOGIC ---
+
         return group;
     }
 }
@@ -184,7 +235,7 @@ class Connection {
         this.id = `connection-${idCounter++}`;
         this.sourceElement = sourceElement;
         this.targetElement = targetElement;
-        
+
         // Find the best connection points
         const { source, target } = sourceElement.findBestConnectionPoint(targetElement);
         this.sourcePoint = source;
@@ -201,7 +252,7 @@ class Connection {
         if (this.sourceElement.id === this.targetElement.id) {
             return true;
         }
-        
+
         // Check if there's already a path from target to source
         return this.pathExists(this.targetElement, this.sourceElement, new Set());
     }
@@ -217,19 +268,19 @@ class Connection {
         if (source.id === target.id) {
             return true;
         }
-        
+
         visited.add(source.id);
-        
+
         for (const conn of source.connections) {
-            const nextElement = conn.targetElement.id === source.id 
-                ? conn.sourceElement 
+            const nextElement = conn.targetElement.id === source.id
+                ? conn.sourceElement
                 : conn.targetElement;
-            
+
             if (!visited.has(nextElement.id) && this.pathExists(nextElement, target, visited)) {
                 return true;
             }
         }
-        
+
         return false;
     }
 
@@ -243,10 +294,10 @@ class Connection {
         const { source, target } = this.sourceElement.findBestConnectionPoint(this.targetElement);
         this.sourcePoint = source;
         this.targetPoint = target;
-        
+
         // Create a curved path for the connection
         const path = this.createCurvedPath(this.sourcePoint, this.targetPoint);
-        
+
         // Create the SVG path
         const connection = canvas.path(path)
             .attr({
@@ -256,21 +307,10 @@ class Connection {
                 'stroke-width': 2
             })
             .addClass('connection-path');
-        
-        // Add arrow marker
-        canvas.defs().marker(10, 10, function(add) {
-            add.polygon('0,0 10,5 0,10').fill('#333');
-        }).attr({
-            id: `${this.id}-marker`,
-            orient: 'auto',
-            markerWidth: 10,
-            markerHeight: 10,
-            refX: 9,
-            refY: 5
-        });
-        
-        connection.marker('end', `#${this.id}-marker`);
-        
+
+        // Reference the GLOBAL marker ID instead
+        connection.attr('marker-end',"url(#arrowhead-marker)");
+
         return connection;
     }
 
@@ -286,24 +326,24 @@ class Connection {
         let sourceControlY = source.y;
         let targetControlX = target.x;
         let targetControlY = target.y;
-        
+
         // Adjust control points based on which sides are connected
         const controlDistance = 50; // Distance of control point from the connection point
-        
+
         switch (source.side) {
             case 'top': sourceControlY -= controlDistance; break;
             case 'right': sourceControlX += controlDistance; break;
             case 'bottom': sourceControlY += controlDistance; break;
             case 'left': sourceControlX -= controlDistance; break;
         }
-        
+
         switch (target.side) {
             case 'top': targetControlY -= controlDistance; break;
             case 'right': targetControlX += controlDistance; break;
             case 'bottom': targetControlY += controlDistance; break;
             case 'left': targetControlX -= controlDistance; break;
         }
-        
+
         // Create a cubic bezier curve
         return `M ${source.x} ${source.y} C ${sourceControlX} ${sourceControlY}, ${targetControlX} ${targetControlY}, ${target.x} ${target.y}`;
     }
