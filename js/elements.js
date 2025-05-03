@@ -1,8 +1,7 @@
 /**
  * elements.js
- * 
- * This file contains the element definitions and creation functions
- * for the event modeling application.
+ *
+ * Defines the Element and Connection classes, constants for types, colors, sizes.
  */
 
 // Define element types and their properties
@@ -24,8 +23,8 @@ const ELEMENT_COLORS = {
     [ELEMENT_TYPES.COMMAND]: '#2196F3', // Blue
     [ELEMENT_TYPES.READ_MODEL]: '#4CAF50', // Green
     [ELEMENT_TYPES.COMMENT]: '#E91E63', // Pink
-    [ELEMENT_TYPES.PROCESSOR]: '#607D8B', // Grey
-    [ELEMENT_TYPES.GUI]: '#9E9E9E', // Light Grey
+    [ELEMENT_TYPES.PROCESSOR]: '#f5f5f5', // Light Grey BG for icon elements
+    [ELEMENT_TYPES.GUI]: '#f5f5f5', // Light Grey BG for icon elements
     [ELEMENT_TYPES.SLICE]: 'rgba(200, 200, 200, 0.3)' // Transparent grey
 };
 
@@ -41,7 +40,7 @@ const ELEMENT_SIZES = {
 let idCounter = 1;
 
 /**
- * Element class - Base class for all elements in the application
+ * Element class - Base class for all visual elements on the canvas.
  */
 class Element {
     constructor(type, x, y, name = '') {
@@ -50,7 +49,7 @@ class Element {
         this.x = x;
         this.y = y;
         this.name = name;
-        this.connections = [];
+        this.connections = []; // Stores references to connected Connection objects
         this.width = ELEMENT_SIZES.WIDTH;
         this.height = ELEMENT_SIZES.HEIGHT;
 
@@ -62,9 +61,9 @@ class Element {
     }
 
     /**
-     * Check if this element overlaps with another element
-     * @param {Element} otherElement - The element to check against
-     * @returns {boolean} - True if elements overlap
+     * Check if this element overlaps with another element (simple AABB check).
+     * @param {Element} otherElement - The element to check against.
+     * @returns {boolean} - True if elements overlap.
      */
     overlaps(otherElement) {
         // Slices can overlap with other elements
@@ -72,7 +71,7 @@ class Element {
             return false;
         }
 
-        // Check for overlap
+        // Standard Axis-Aligned Bounding Box overlap check
         return !(
             this.x + this.width < otherElement.x ||
             this.x > otherElement.x + otherElement.width ||
@@ -82,8 +81,8 @@ class Element {
     }
 
     /**
-     * Get the connection points for this element (for arrows)
-     * @returns {Object} - Object with top, right, bottom, left points
+     * Get the center connection points for this element.
+     * @returns {Object} - Object with keys 'top', 'right', 'bottom', 'left' and {x, y} values.
      */
     getConnectionPoints() {
         return {
@@ -95,25 +94,24 @@ class Element {
     }
 
     /**
-     * Find the best connection point for connecting to another element
-     * @param {Element} targetElement - The element to connect to
-     * @returns {Object} - The best connection point and target point
+     * Find the pair of connection points (one on this element, one on the target)
+     * that have the minimum distance between them.
+     * @param {Element} targetElement - The element to connect to.
+     * @returns {Object} - { source: {x, y, side}, target: {x, y, side} }
      */
     findBestConnectionPoint(targetElement) {
         const sourcePoints = this.getConnectionPoints();
         const targetPoints = targetElement.getConnectionPoints();
-
-        // Calculate distances between all possible connection points
         let minDistance = Infinity;
         let bestSourcePoint = null;
         let bestTargetPoint = null;
 
         for (const [sourceSide, sourcePoint] of Object.entries(sourcePoints)) {
             for (const [targetSide, targetPoint] of Object.entries(targetPoints)) {
-                const distance = Math.sqrt(
-                    Math.pow(sourcePoint.x - targetPoint.x, 2) +
-                    Math.pow(sourcePoint.y - targetPoint.y, 2)
-                );
+                // Simple Euclidean distance
+                const dx = sourcePoint.x - targetPoint.x;
+                const dy = sourcePoint.y - targetPoint.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
 
                 if (distance < minDistance) {
                     minDistance = distance;
@@ -122,19 +120,17 @@ class Element {
                 }
             }
         }
-
         return { source: bestSourcePoint, target: bestTargetPoint };
     }
 
     /**
-     * Create an SVG representation of this element
-     * @param {SVG.Container} canvas - The SVG canvas to draw on
-     * @returns {SVG.Group} - The SVG group containing the element
+     * Create an SVG representation of this element.
+     * @param {SVG.Container} canvas - The SVG canvas to draw on.
+     * @param {InteractionManager} interactionManager - Reference to handle interactions.
+     * @returns {SVG.Group} - The SVG group containing the element.
      */
     createSVG(canvas, interactionManager) {
         const group = canvas.group().attr('id', this.id).addClass('element');
-
-        // Create the element rectangle
         const rect = group.rect(this.width, this.height)
             .attr({
                 fill: ELEMENT_COLORS[this.type],
@@ -143,27 +139,65 @@ class Element {
             })
             .addClass('element-rect');
 
-        // For Processor and GUI, add an icon
+        // Add icons if applicable
         if (this.type === ELEMENT_TYPES.PROCESSOR) {
-            group.text('⚙️')
-                .font({ size: 20 })
-                .center(this.width / 2, this.height / 2);
+            group.text('⚙️').font({ size: 20 }).center(this.width / 2, this.height / 2);
         } else if (this.type === ELEMENT_TYPES.GUI) {
-            group.text('🖥️')
-                .font({ size: 20 })
-                .center(this.width / 2, this.height / 2);
+            group.text('🖥️').font({ size: 20 }).center(this.width / 2, this.height / 2);
         }
 
-        // Add text for the name
+        // Create Display Text (initially visible)
         const text = group.text(this.name || this.type)
             .font({ size: 12, family: 'Arial', anchor: 'middle' })
-            .center(this.width / 2, this.height / 2)
-            .addClass('element-text');
+            //.center(this.width / 2, this.height / 2)
+            .addClass('element-text') // For general styling
+            .addClass('element-display-text') // For finding later
+            .attr('visibility', 'visible')// Explicitly visible
+            .attr('dominant-baseline', 'middle'); 
+       
+        // Calculate position for middle anchor point
+        const textX = this.width / 2;
+        const textY = this.height / 2; // Adjust this slightly for better vertical alignment?
+        console.log(`Creando text ${text} ${textX} ${textY}`);
+        text.center(textX, textY); // Move the anchor point to the calculated center
+        
+        // Create ForeignObject (initially hidden)
+        const foreignObject = group.foreignObject(this.width, this.height) // Slightly smaller
+            .attr({ x: 0, y: 0 })
+            .addClass('element-editor-fobj') // For finding later
+            .attr('visibility', 'hidden'); // Initially hidden
 
-        // Position the group at the element's coordinates
+        // Create HTML Input using DOM methods inside ForeignObject
+        const editorWrapperDiv = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
+        editorWrapperDiv.setAttribute('style', `
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: 5px; /* Add some padding */
+    box-sizing: border-box;
+`);
+        const inputElement = document.createElementNS('http://www.w3.org/1999/xhtml', 'input');
+        inputElement.setAttribute('type', 'text');
+        inputElement.setAttribute('class', 'element-name-input-inline'); // For finding later
+        inputElement.style.width = '100%';
+        // inputElement.style.height = '100%';
+        inputElement.style.border = '1px solid #ccc';
+        inputElement.style.padding = '4px';
+        inputElement.style.boxSizing = 'border-box';
+        inputElement.style.fontFamily = 'Arial';
+        inputElement.style.fontSize = '12px';
+        inputElement.style.textAlign = 'center'
+        // Append input to the centering div
+        editorWrapperDiv.appendChild(inputElement);
+        // foreignObject.node.appendChild(inputElement);
+        // Append the centering div to the foreignObject's raw node
+        foreignObject.node.appendChild(editorWrapperDiv);
+        // Position the group
         group.move(this.x, this.y);
 
-        // For slices, make the rect transparent with a dashed border
+        // Slice styling
         if (this.type === ELEMENT_TYPES.SLICE) {
             rect.attr({
                 fill: ELEMENT_COLORS[this.type],
@@ -171,64 +205,49 @@ class Element {
                 stroke: '#888'
             });
         }
-        // --- ADD DRAGGABLE LOGIC ---
+
+        // Add Draggable behavior
         group.draggable().on('dragstart.namespace', (e) => {
-            e.preventDefault(); // Prevent browser default drag behavior
-
-            // Store reference to the element being dragged
-            interactionManager.currentDraggingElement = this;
-
-            group.addClass('dragging'); // Add visual feedback
-            interactionManager.hideContextMenu(); // Hide context menu during drag
+            e.preventDefault();
+            if (interactionManager) {
+                interactionManager.currentDraggingElement = this;
+                interactionManager.hideContextMenu();
+                if (interactionManager.currentEditingInput) {
+                    interactionManager.cancelInlineEdit(); // Cancel edit on drag start
+                }
+            }
+            group.addClass('dragging');
         }).on('dragmove.namespace', (e) => {
             e.preventDefault();
             const { handler, box } = e.detail;
-
-            // Update the element's internal coordinates
-            // Note: box.x, box.y are the new coordinates after the drag move
+            // Update internal coordinates
             this.x = box.x;
             this.y = box.y;
-
-            // Move the SVG group itself (redundant IF draggable does it, but safe)
-            handler.move(box.x, box.y); // Draggable plugin usually handles this
-
-            // Update connections attached to this element
-            // We need access to the connectionManager here!
-            // Pass interactionManager -> connectionManager
-            interactionManager.connectionManager.updateConnectionsForElement(this);
-
+            // Move the SVG group visually
+            handler.move(box.x, box.y);
+            // Update connections efficiently
+            if (interactionManager?.connectionManager) { // Safety check
+                interactionManager.connectionManager.updateConnectionsForElement(this);
+            }
         }).on('dragend.namespace', (e) => {
             e.preventDefault();
             const { handler, box } = e.detail;
-
-            group.removeClass('dragging'); // Remove visual feedback
-
-            // Update final position (might be redundant if dragmove updated)
+            group.removeClass('dragging');
+            // Update final position (might be redundant but safe)
             this.x = box.x;
             this.y = box.y;
-
-            // Clear the reference
-            interactionManager.currentDraggingElement = null;
-
-            // Optional: Check if it was a "click" (minimal movement)
-            // This might be needed if regular click events are suppressed.
-            // Example check (needs refinement):
-            // const dx = box.x - initialX; // Need to store initialX on dragstart
-            // const dy = box.y - initialY; // Need to store initialY on dragstart
-            // if (Math.sqrt(dx*dx + dy*dy) < interactionManager.dragThreshold) {
-            //      interactionManager.selectElement(this);
-            //      interactionManager.showContextMenu(e.clientX, e.clientY); // Need clientX/Y from event
-            // }
-
+            if (interactionManager) {
+                interactionManager.currentDraggingElement = null;
+            }
+            // TODO: Consider click handling here if simple clicks fail
         });
-        // --- END OF DRAGGABLE LOGIC ---
 
         return group;
     }
 }
 
 /**
- * Connection class - Represents a connection between two elements
+ * Connection class - Represents a directed connection between two elements.
  */
 class Connection {
     constructor(sourceElement, targetElement) {
@@ -236,58 +255,56 @@ class Connection {
         this.sourceElement = sourceElement;
         this.targetElement = targetElement;
 
-        // Find the best connection points
+        // Calculate initial best connection points (updated when drawn/moved)
         const { source, target } = sourceElement.findBestConnectionPoint(targetElement);
         this.sourcePoint = source;
         this.targetPoint = target;
     }
 
     /**
-     * Check if this connection creates a loop in the graph
-     * @param {Array} elements - All elements in the graph
-     * @returns {boolean} - True if connection creates a loop
+     * Check if adding this connection would create a loop in the graph (DFS).
+     * @returns {boolean} - True if connection creates a loop.
      */
     createsLoop() {
-        // Simple loop check: does this connection connect back to the source?
-        if (this.sourceElement.id === this.targetElement.id) {
-            return true;
-        }
-
-        // Check if there's already a path from target to source
+        // Check direct self-loop (should be prevented earlier)
+        if (this.sourceElement.id === this.targetElement.id) { return true; }
+        // Check if a path already exists from target back to source
         return this.pathExists(this.targetElement, this.sourceElement, new Set());
     }
 
     /**
-     * Check if there's a path from source to target
-     * @param {Element} source - The source element
-     * @param {Element} target - The target element
-     * @param {Set} visited - Set of visited element IDs
-     * @returns {boolean} - True if path exists
+     * Helper for createsLoop: Performs Depth First Search to find path.
+     * @param {Element} current - The current element in the search path.
+     * @param {Element} target - The target element we are trying to reach.
+     * @param {Set<string>} visited - Set of visited element IDs in the current path.
+     * @returns {boolean} - True if path exists from current to target.
      */
-    pathExists(source, target, visited) {
-        if (source.id === target.id) {
-            return true;
-        }
+    pathExists(current, target, visited) {
+        if (current.id === target.id) { return true; }
+        visited.add(current.id);
 
-        visited.add(source.id);
-
-        for (const conn of source.connections) {
-            const nextElement = conn.targetElement.id === source.id
-                ? conn.sourceElement
-                : conn.targetElement;
-
-            if (!visited.has(nextElement.id) && this.pathExists(nextElement, target, visited)) {
-                return true;
+        // Look at outgoing connections from the 'current' element
+        for (const conn of current.connections) {
+            // Only follow connections originating from 'current'
+            if (conn.sourceElement.id === current.id) {
+                const nextElement = conn.targetElement;
+                if (!visited.has(nextElement.id)) {
+                    if (this.pathExists(nextElement, target, visited)) {
+                        return true;
+                    }
+                }
             }
         }
-
+        // Backtrack (implicitly handled by returning false if no path found)
+        // visited.delete(current.id); // Not strictly needed for basic check
         return false;
     }
 
+
     /**
-     * Create an SVG representation of this connection
-     * @param {SVG.Container} canvas - The SVG canvas to draw on
-     * @returns {SVG.Path} - The SVG path representing the connection
+     * Create an SVG representation of this connection (a curved path with marker).
+     * @param {SVG.Container} canvas - The SVG canvas to draw on.
+     * @returns {SVG.Path} - The SVG path representing the connection.
      */
     createSVG(canvas) {
         // Update connection points based on current element positions
@@ -295,11 +312,11 @@ class Connection {
         this.sourcePoint = source;
         this.targetPoint = target;
 
-        // Create a curved path for the connection
-        const path = this.createCurvedPath(this.sourcePoint, this.targetPoint);
+        // Create the SVG path data string
+        const pathData = this.createCurvedPath(this.sourcePoint, this.targetPoint);
 
-        // Create the SVG path
-        const connection = canvas.path(path)
+        // Create the SVG path element
+        const connectionPath = canvas.path(pathData)
             .attr({
                 id: this.id,
                 fill: 'none',
@@ -308,35 +325,33 @@ class Connection {
             })
             .addClass('connection-path');
 
-        // Reference the GLOBAL marker ID instead
-        connection.attr('marker-end',"url(#arrowhead-marker)");
+        // Apply the globally defined marker using its ID via .attr()
+        connectionPath.attr('marker-end', 'url(#arrowhead-marker)');
 
-        return connection;
+        return connectionPath;
     }
 
     /**
-     * Create a curved path between two points
-     * @param {Object} source - Source point {x, y, side}
-     * @param {Object} target - Target point {x, y, side}
-     * @returns {string} - SVG path data
+     * Calculate the SVG path data string for a cubic Bezier curve between two points.
+     * Control points are offset based on the connection side for better routing.
+     * @param {Object} source - Source point {x, y, side}.
+     * @param {Object} target - Target point {x, y, side}.
+     * @returns {string} - SVG path data string (e.g., "M x y C cx1 cy1, cx2 cy2, x2 y2").
      */
     createCurvedPath(source, target) {
-        // Determine control points based on sides
         let sourceControlX = source.x;
         let sourceControlY = source.y;
         let targetControlX = target.x;
         let targetControlY = target.y;
+        const controlDistance = 50; // How far control points extend
 
-        // Adjust control points based on which sides are connected
-        const controlDistance = 50; // Distance of control point from the connection point
-
+        // Offset control points based on connection side
         switch (source.side) {
             case 'top': sourceControlY -= controlDistance; break;
             case 'right': sourceControlX += controlDistance; break;
             case 'bottom': sourceControlY += controlDistance; break;
             case 'left': sourceControlX -= controlDistance; break;
         }
-
         switch (target.side) {
             case 'top': targetControlY -= controlDistance; break;
             case 'right': targetControlX += controlDistance; break;
@@ -344,18 +359,7 @@ class Connection {
             case 'left': targetControlX -= controlDistance; break;
         }
 
-        // Create a cubic bezier curve
+        // Format: M = moveto, C = curveto (cubic bezier)
         return `M ${source.x} ${source.y} C ${sourceControlX} ${sourceControlY}, ${targetControlX} ${targetControlY}, ${target.x} ${target.y}`;
     }
 }
-
-// // Export classes and constants
-// if (typeof module !== 'undefined') {
-//     module.exports = {
-//         ELEMENT_TYPES,
-//         ELEMENT_COLORS,
-//         ELEMENT_SIZES,
-//         Element,
-//         Connection
-//     };
-// }

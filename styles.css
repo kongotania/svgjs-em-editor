@@ -7,39 +7,45 @@
 
 body {
     font-family: Arial, sans-serif;
-    overflow: hidden;
+    overflow: hidden; /* Prevent scrollbars on body */
+    height: 100vh;
+    width: 100vw;
 }
 
 /* Main layout */
 .app-container {
     display: flex;
-    height: 100vh;
-    width: 100vw;
+    height: 100%;
+    width: 100%;
 }
 
 /* Left palette */
 .palette {
     width: 200px;
+    flex-shrink: 0; /* Prevent palette from shrinking */
     background-color: #f0f0f0;
     padding: 10px;
     border-right: 1px solid #ccc;
-    overflow-y: auto;
+    overflow-y: auto; /* Allow scrolling if many items */
 }
 
 .palette h2 {
     margin-bottom: 15px;
     text-align: center;
+    font-size: 16px;
+    color: #333;
 }
 
 .palette-item {
     display: flex;
     align-items: center;
-    padding: 10px;
+    padding: 8px 10px;
     margin-bottom: 5px;
     border-radius: 5px;
     cursor: grab;
     background-color: #fff;
-    transition: background-color 0.2s;
+    border: 1px solid #ddd;
+    transition: background-color 0.2s ease;
 }
 
 .palette-item:hover {
@@ -47,59 +53,43 @@ body {
 }
 
 .element-preview {
-    width: 30px;
-    height: 30px;
+    width: 24px; /* Slightly smaller preview */
+    height: 24px;
     margin-right: 10px;
     border-radius: 3px;
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 14px; /* For icons */
+    flex-shrink: 0;
 }
 
 /* Element type colors */
-.event {
-    background-color: #FF9800; /* Orange */
+.palette-item span {
+    font-size: 13px;
 }
-
-.external-event {
-    background-color: #FFEB3B; /* Yellow */
-}
-
-.command {
-    background-color: #2196F3; /* Blue */
-}
-
-.read-model {
-    background-color: #4CAF50; /* Green */
-}
-
-.comment {
-    background-color: #E91E63; /* Pink */
-}
-
-.processor, .gui {
-    background-color: #f5f5f5;
-    font-size: 16px;
-}
-
-.slice {
-    background-color: rgba(200, 200, 200, 0.3);
-    border: 1px dashed #888;
-}
+.event { background-color: #FF9800; }
+.external-event { background-color: #FFEB3B; }
+.command { background-color: #2196F3; }
+.read-model { background-color: #4CAF50; }
+.comment { background-color: #E91E63; }
+.processor, .gui { background-color: #f5f5f5; }
+.slice { background-color: rgba(200, 200, 200, 0.3); border: 1px dashed #888; }
 
 /* Main workspace */
 .workspace {
-    flex: 1;
-    position: relative;
+    flex-grow: 1; /* Allow workspace to fill remaining space */
+    position: relative; /* For absolute positioning of controls */
     background-color: #fff;
-    overflow: hidden;
+    overflow: hidden; /* Important: canvas itself shouldn't scroll */
 }
 
 #drawing-area {
     width: 100%;
     height: 100%;
     background-color: #f8f8f8;
-    background-image: 
+    /* CSS Grid Background */
+    background-image:
         linear-gradient(rgba(200, 200, 200, 0.2) 1px, transparent 1px),
         linear-gradient(90deg, rgba(200, 200, 200, 0.2) 1px, transparent 1px);
     background-size: 20px 20px;
@@ -108,8 +98,8 @@ body {
 /* Controls */
 .controls {
     position: absolute;
-    bottom: 20px;
-    right: 20px;
+    bottom: 15px;
+    right: 15px;
     z-index: 100;
     display: flex;
     gap: 5px;
@@ -126,6 +116,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .controls button:hover {
@@ -135,83 +126,86 @@ body {
 /* Context menu */
 .context-menu {
     position: absolute;
-    display: none;
+    display: none; /* Controlled by JS */
     background-color: #fff;
     border: 1px solid #ccc;
     border-radius: 5px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    z-index: 1000;
+    z-index: 1000; /* Ensure it's above canvas */
+    padding: 5px 0; /* Padding top/bottom */
 }
 
 .context-menu-item {
-    padding: 8px 12px;
+    padding: 8px 15px; /* More padding */
     cursor: pointer;
     display: block;
     width: 100%;
     text-align: left;
     border: none;
     background: none;
+    font-size: 13px; /* Match palette */
+    white-space: nowrap; /* Prevent wrapping */
 }
 
 .context-menu-item:hover {
     background-color: #f0f0f0;
 }
 
-/* Name editor */
-.name-editor {
-    position: absolute;
-    display: none;
-    background-color: #fff;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    padding: 10px;
-    z-index: 1000;
-}
-
-.name-editor input {
-    padding: 5px;
-    margin-right: 5px;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-}
-
-.name-editor button {
-    padding: 5px 10px;
-    background-color: #4CAF50;
-    color: white;
-    border: none;
-    border-radius: 3px;
-    cursor: pointer;
-}
-
 /* SVG styling for elements on the canvas */
-.element-rect {
-    cursor: pointer;
+.element { /* Style the group */
+    /* No specific styles needed unless for interaction states */
 }
 
-.element-text {
+.element-rect {
+    cursor: pointer; /* Indicate clickable */
+    stroke: #666; /* Add a subtle border */
+    stroke-width: 1px;
+}
+
+/* Style the display text within elements */
+.element-display-text {
     font-family: Arial, sans-serif;
     font-size: 12px;
-    pointer-events: none; /* Let clicks pass through text to the element underneath */
+    fill: #333; /* Default text color */
+    pointer-events: none; /* Clicks pass through */
+    -webkit-user-select: none; /* Disable text selection */
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
-.element-selected {
-    stroke: #000;
+/* Style the inline editor input (via its class) */
+.element-name-input-inline {
+    /* Styles applied directly in JS, but could add focus styles here */
+}
+.element-name-input-inline:focus {
+     outline: 1px solid #4CAF50; /* Simple focus indicator */
+}
+
+
+/* Highlighting for selected elements */
+.element-selected > .element-rect { /* Target the rect inside selected group */
+    stroke: #007bff; /* Selection color */
     stroke-width: 2px;
 }
 
+/* Style for connection paths */
 .connection-path {
     fill: none;
     stroke: #333;
     stroke-width: 2px;
 }
-
-.connection-marker {
-    fill: #333;
+.connection-path:hover { /* Optional: highlight on hover */
+    stroke: #007bff;
 }
 
-/* For elements being dragged */
+/* Style for arrowhead markers (though fill set in JS) */
+.connection-marker {
+    /* fill: #333; */ /* Fill is set in JS definition */
+}
+
+/* Visual cue for elements being dragged */
 .dragging {
     opacity: 0.7;
+    cursor: grabbing;
 }

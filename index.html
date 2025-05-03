@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Modeling Application</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- SVG.js library -->
+    <!-- SVG.js Core Library -->
     <script src="https://cdn.jsdelivr.net/npm/@svgdotjs/svg.js@3.2.4/dist/svg.min.js"></script>
+    <!-- SVG.js Draggable Plugin -->
     <script src="https://cdn.jsdelivr.net/npm/@svgdotjs/svg.draggable.js@3.0.6/dist/svg.draggable.min.js"></script>
-
 </head>
 <body>
     <div class="app-container">
@@ -57,26 +57,22 @@
                 <button id="zoom-out">-</button>
                 <button id="reset-view">Reset</button>
             </div>
-            
+
             <!-- SVG drawing area -->
             <div id="drawing-area"></div>
         </div>
     </div>
 
-    <!-- Context menu for selected elements -->
+    <!-- Context menu for selected elements/connections -->
     <div id="context-menu" class="context-menu">
         <button id="delete-element" class="context-menu-item">🗑️ Delete</button>
         <button id="connect-element" class="context-menu-item">➡️ Connect</button>
         <button id="edit-properties" class="context-menu-item">🔧 Properties</button>
     </div>
 
-    <!-- Name editor popup -->
-    <div id="name-editor" class="name-editor">
-        <input type="text" id="element-name-input">
-        <button id="save-name">Save</button>
-    </div>
+    <!-- No external name editor div -->
 
-    <!-- Load JavaScript files -->
+    <!-- Load JavaScript files in correct order -->
     <script src="js/elements.js"></script>
     <script src="js/connections.js"></script>
     <script src="js/interactions.js"></script>
