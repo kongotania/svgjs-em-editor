@@ -15,19 +15,21 @@ class InteractionManager {
         this.connectionManager = connectionManager;
 
         // State tracking
-        this.selectedElement = null;         // Element currently selected
-        this.currentDraggingElement = null;  // Element currently being dragged by svg.draggable
-        this.currentEditingInput = null;   // Reference to the active inline input DOM node
-        this.isPanning = false;            // Is the canvas being panned?
-        this.panStartX = 0;                // Mouse X position at pan start
-        this.panStartY = 0;                // Mouse Y position at pan start
-        this.isPanningKeyPressed = false;  // Is the spacebar held down for panning?
-        this.zoom = 1;                     // Current zoom level
+        this.selectedElement = null;
+        this.currentDraggingElement = null;
+        this.currentEditingInput = null;
+        this.isPanning = false;
+        this.panStartX = 0;
+        this.panStartY = 0;
+        this.isPanningKeyPressed = false;
+        this.zoom = 1;
 
-        // DOM Elements
-        this.contextMenu = document.getElementById('context-menu');
+        // --- CHANGE: Get references to BOTH context menus ---
+        this.elementContextMenu = document.getElementById('element-context-menu');
+        this.connectionContextMenu = document.getElementById('connection-context-menu');
+        this.contextTargetConnection = null; // Store connection when its menu is shown
 
-        // Bind 'this' context for event handlers
+        // Bind 'this' context for event handlers that need it
         this.handleInlineEditorKeyDown = this.handleInlineEditorKeyDown.bind(this);
         this.handleCanvasMouseDown = this.handleCanvasMouseDown.bind(this);
         this.handleCanvasMouseMove = this.handleCanvasMouseMove.bind(this);
@@ -37,9 +39,9 @@ class InteractionManager {
         this.handleKeyDown = this.handleKeyDown.bind(this);
         this.handleKeyUp = this.handleKeyUp.bind(this);
         this.handleDrop = this.handleDrop.bind(this);
-        this.handleDeleteElement = this.handleDeleteElement.bind(this);
-        this.handleConnectElement = this.handleConnectElement.bind(this);
-        this.handleEditProperties = this.handleEditProperties.bind(this);
+
+        // --- CHANGE: No longer need to bind context menu handlers here ---
+        // They will be added directly or use arrow functions in initEvents
 
         // Initialize all event listeners
         this.initEvents();
@@ -49,24 +51,64 @@ class InteractionManager {
      * Initialize all event listeners for canvas, document, UI controls.
      */
     initEvents() {
-        // console.log("Initializing Interaction Events");
         // Canvas interaction listeners
         this.canvas.node.addEventListener('mousedown', this.handleCanvasMouseDown);
         this.canvas.node.addEventListener('mousemove', this.handleCanvasMouseMove);
         this.canvas.node.addEventListener('mouseup', this.handleCanvasMouseUp);
         this.canvas.node.addEventListener('click', this.handleCanvasClick);
-        this.canvas.node.addEventListener('contextmenu', e => e.preventDefault()); // Prevent default right-click menu
-        this.canvas.node.addEventListener('dblclick', this.handleDoubleClick); // For editing name
+        this.canvas.node.addEventListener('contextmenu', e => e.preventDefault());
+        this.canvas.node.addEventListener('dblclick', this.handleDoubleClick);
 
         // Global keyboard listeners
         document.addEventListener('keydown', this.handleKeyDown);
         document.addEventListener('keyup', this.handleKeyUp);
 
-        // Context menu button listeners
-        document.getElementById('delete-element')?.addEventListener('click', this.handleDeleteElement); // Added safety check
-        document.getElementById('connect-element')?.addEventListener('click', this.handleConnectElement);
-        document.getElementById('edit-properties')?.addEventListener('click', this.handleEditProperties);
+        // --- CHANGE: Attach listeners to specific buttons in each menu ---
+        // Element Context Menu Actions
+        document.getElementById('ctx-el-delete')?.addEventListener('click', () => {
+            console.log("Element context menu: Delete");
+            if (this.currentEditingInput) this.cancelInlineEdit();
+            if (this.selectedElement) {
+                this.elementManager.removeElement(this.selectedElement);
+                // removeElement should trigger deselection via interactions eventually,
+                // but explicit hide is safer
+                this.selectedElement = null; // Clear selection state immediately
+                this.hideAllContextMenus();
+            }
+        });
+        document.getElementById('ctx-el-connect')?.addEventListener('click', () => {
+            console.log("Element context menu: Connect");
+            if (this.currentEditingInput) this.cancelInlineEdit();
+            if (this.selectedElement) {
+                this.connectionManager.startConnection(this.selectedElement);
+            }
+            this.hideAllContextMenus(); // Hide menu after action
+        });
+        document.getElementById('ctx-el-edit')?.addEventListener('click', () => {
+            console.log("Element context menu: Edit Properties");
+            if (this.selectedElement) {
+                if (!this.currentEditingInput || this.currentEditingInput.closest('.element')?.id !== this.selectedElement.id) {
+                    this.showNameEditor(this.selectedElement); // showNameEditor hides menus
+                } else {
+                    this.hideAllContextMenus(); // Hide if already editing
+                }
+            } else {
+                this.hideAllContextMenus();
+            }
+        });
 
+        // Connection Context Menu Actions
+        document.getElementById('ctx-conn-delete')?.addEventListener('click', () => {
+            console.log("Connection context menu: Delete");
+            if (this.contextTargetConnection) {
+                console.log(`Deleting connection ${this.contextTargetConnection.id} via menu`);
+                this.connectionManager.removeConnection(this.contextTargetConnection);
+                this.hideAllContextMenus(); // Hide after action
+            } else {
+                console.error("Delete connection clicked, but no target connection stored!");
+                this.hideAllContextMenus();
+            }
+        });
         // Zoom control listeners (with cancel edit check)
         document.getElementById('zoom-in')?.addEventListener('click', () => {
             if (this.currentEditingInput) { this.cancelInlineEdit(); }
@@ -106,53 +148,43 @@ class InteractionManager {
     }
 
     /** Mousedown on canvas: Initiate panning or cancel edits. */
-    handleCanvasMouseDown(e) {
+    handleCanvasMouseDown(e) { // (Keep as is)
         const target = e.target;
         const elementId = this.findElementId(target);
-
         if (elementId) {
-            // If clicking on an element while editing *another* element, cancel the edit.
             if (this.currentEditingInput && this.selectedElement && this.selectedElement.id !== elementId) {
                 this.cancelInlineEdit();
             }
-            // Actual drag initiation is handled by svg.draggable plugin on the element itself.
         } else {
-            // Clicked on empty canvas background
-            if (this.currentEditingInput) { // Cancel edit if clicking background
+            if (this.currentEditingInput) {
                 this.cancelInlineEdit();
             }
-            // Check for panning initiation (middle mouse or spacebar+click)
             if (e.button === 1 || e.buttons === 4 || this.isPanningKeyPressed) {
                 this.isPanning = true;
                 this.panStartX = e.clientX;
                 this.panStartY = e.clientY;
                 this.canvas.node.style.cursor = 'grabbing';
-                e.preventDefault(); // Prevent default middle-click scroll/pan
+                e.preventDefault();
             }
-            // Other empty canvas clicks are handled in handleCanvasClick
         }
     }
 
     /** Mousemove on canvas: Handle panning or update temporary connection line. */
-    handleCanvasMouseMove(e) {
+    handleCanvasMouseMove(e) { // (Keep as is)
         if (this.isPanning) {
             const dx = e.clientX - this.panStartX;
             const dy = e.clientY - this.panStartY;
             const viewbox = this.canvas.viewbox();
-            // Prevent errors if zoom is somehow zero
             const currentZoom = this.zoom || 1;
             const newX = viewbox.x - dx / currentZoom;
             const newY = viewbox.y - dy / currentZoom;
             this.canvas.viewbox(newX, newY, viewbox.width, viewbox.height);
-            // Update start position for next move calculation
             this.panStartX = e.clientX;
             this.panStartY = e.clientY;
         } else if (this.connectionManager.connectionMode) {
-            // Update temporary line position if connection mode is active
             const point = this.getCanvasPoint(e.clientX, e.clientY);
             this.connectionManager.updateTempConnection(point.x, point.y);
         }
-        // Element dragging updates are handled by the plugin's 'dragmove' listener
     }
 
     /** Mouseup on canvas: End panning. */
@@ -170,37 +202,27 @@ class InteractionManager {
 
     /** Click on canvas: Handle selection, context menus, connection completion, cancellations. */
     handleCanvasClick(e) {
-        // Prevent click actions if a drag operation likely just ended on this target
-        // Note: This requires coordination with dragend, difficult to do reliably here.
-        // Let's assume simple clicks are distinct from drag releases for now.
-        console.log(">>>handleCavasClick");
+        console.log(">>> handleCanvasClick - Target:", e.target); // Keep log
+
         const target = e.target;
         const elementId = this.findElementId(target);
 
         // --- Click on an Element ---
         if (elementId) {
             const element = this.elementManager.getElementById(elementId);
-            if (!element) return; // Should not happen
+            if (!element) return;
 
-            // If connecting, complete the connection
             if (this.connectionManager.connectionMode) {
-                console.log("===handleCanvasClick:Click on element to complete connection:", element.id);
                 this.connectionManager.completeConnection(element);
-                e.stopPropagation(); // Prevent further actions like selection
-                return;
+                e.stopPropagation(); return;
             }
-
-            // If editing this element, do nothing on simple click inside
             if (this.currentEditingInput && this.selectedElement?.id === elementId) {
-                console.log("===handleCanvasClick:Clicked element being edited, ignoring click.");
-                return;
+                return; // Ignore click if editing this element
             }
 
-            // Otherwise, select the element and show context menu
-            console.log("===handleCanvasClick:Click selecting element:", element.id);
+            // Select the element (this will show the element context menu)
             this.selectElement(element);
-            //  this.showContextMenu(e.clientX, e.clientY);
-            e.stopPropagation(); // Prevent canvas background click
+            e.stopPropagation(); // Prevent background click deselecting immediately
             return;
         }
 
@@ -209,28 +231,22 @@ class InteractionManager {
         if (connectionId) {
             const connection = this.connectionManager.connections.find(c => c.id === connectionId);
             if (connection) {
-                console.log("===handleCanvasClick:Clicked on connection:", connection.id);
-                if (this.currentEditingInput) this.cancelInlineEdit(); // Cancel edit if open
+                if (this.currentEditingInput) this.cancelInlineEdit();
                 this.selectElement(null); // Deselect any element
-                this.showContextMenu(e.clientX, e.clientY, connection); // Show connection context menu
+                // --- CHANGE: Show connection context menu ---
+                this.showContextMenuForConnection(connection, e.clientX, e.clientY);
                 e.stopPropagation();
             }
             return;
         }
 
         // --- Click on Empty Canvas Background ---
-        console.log("===handleCanvasClick:Clicked on empty canvas space.");
-        // *** Bug 2 Fix: cancelInlineEdit is called here if editing ***
-        if (this.currentEditingInput) this.cancelInlineEdit(); // Cancel edit
-        this.selectElement(null); // Deselect any element
-        // this.hideContextMenu(); // Hide context menu
+        if (this.currentEditingInput) this.cancelInlineEdit();
+        this.selectElement(null); // Deselect any element (will hide menus)
         if (this.connectionManager.connectionMode) {
-            console.log("===handleCanvasClick:Cancelling connection mode via empty click.");
-            this.connectionManager.cancelConnection(); // Cancel connection mode
+            this.connectionManager.cancelConnection();
         }
-        console.log("<<<handleCanvasClick");
     }
-
     /** Double-click on element: Start inline editing. */
     handleDoubleClick(e) {
         const target = e.target;
@@ -249,40 +265,28 @@ class InteractionManager {
     }
 
     /** Global KeyDown handler. */
-    handleKeyDown(e) {
-        // Allow standard input behavior if editing, except for Enter/Escape
+    handleKeyDown(e) { // (Modify slightly for hiding menus)
         if (this.currentEditingInput && e.key !== 'Enter' && e.key !== 'Escape') {
             return;
         }
-
-        // Delete selected element (if not editing)
         if (e.key === 'Delete' && this.selectedElement && !this.currentEditingInput) {
-            // console.log("Delete key pressed for element:", this.selectedElement.id);
             this.elementManager.removeElement(this.selectedElement);
-            this.selectedElement = null; // Clear selection state
-            this.hideContextMenu(); // Hide context menu if open
+            this.selectedElement = null; // Clear selection
+            this.hideAllContextMenus();  // Hide menu
         }
-
-        // Escape key handling
         if (e.key === 'Escape') {
-            // console.log("Escape key pressed.");
-            // *** Bug 2 Fix: cancelInlineEdit is called via handleInlineEditorKeyDown if editing ***
-            // ConnectionManager handles Escape for inline editor via handleInlineEditorKeyDown
             if (this.connectionManager.connectionMode) {
-                // console.log("--- Cancelling connection mode via Escape");
                 this.connectionManager.cancelConnection();
-            } else if (!this.currentEditingInput) { // Only deselect/hide menu if not editing
-                this.hideContextMenu();
-                this.selectElement(null);
+            } else if (!this.currentEditingInput) {
+                this.hideAllContextMenus(); // Hide menus
+                this.selectElement(null);  // Deselect
             }
-            // If editing, Escape is handled by handleInlineEditorKeyDown called by input listener
+            // Escape during edit is handled by handleInlineEditorKeyDown -> cancelInlineEdit
         }
-
-        // Spacebar for panning (if not editing)
         if (e.key === ' ' && !e.repeat && !this.currentEditingInput) {
             this.isPanningKeyPressed = true;
             this.canvas.node.style.cursor = 'grab';
-            e.preventDefault(); // Prevent page scroll on space
+            e.preventDefault();
         }
     }
 
@@ -321,99 +325,15 @@ class InteractionManager {
         }
     }
 
-    /** Context Menu: Delete Element handler. */
-    handleDeleteElement() {
-        // console.log("Context menu: Delete Element");
-        if (this.currentEditingInput) this.cancelInlineEdit(); // Cancel edit first
-
-        if (this.selectedElement) {
-            this.elementManager.removeElement(this.selectedElement);
-            this.selectedElement = null; // Clear selection
+    hideAllContextMenus() {
+        if (this.elementContextMenu) {
+            this.elementContextMenu.style.display = 'none';
         }
-        this.hideContextMenu();
-    }
-
-    /** Context Menu: Connect Element handler. */
-    handleConnectElement() {
-        // console.log("Context menu: Connect Element");
-        if (this.currentEditingInput) this.cancelInlineEdit(); // Cancel edit first
-
-        if (this.selectedElement) {
-            this.connectionManager.startConnection(this.selectedElement);
+        if (this.connectionContextMenu) {
+            this.connectionContextMenu.style.display = 'none';
         }
-        this.hideContextMenu();
-    }
-
-    /** Context Menu: Edit Properties handler (currently just opens name editor). */
-    handleEditProperties() {
-        // console.log("Context menu: Edit Properties");
-        if (this.selectedElement) {
-            // If not already editing this element, start editing
-            if (!this.currentEditingInput || this.currentEditingInput.closest('.element')?.id !== this.selectedElement.id) {
-                this.showNameEditor(this.selectedElement);
-            }
-        }
-        this.hideContextMenu();
-    }
-
-    /** Show context menu UI. */
-    showContextMenu(x, y, connection = null) {
-        console.log(`>>>showContextMenu:Showing context menu at (${x}, ${y})`, connection ? `for connection ${connection.id}` : `for element ${this.selectedElement?.id}`);
-        // if (this.currentEditingInput) this.cancelInlineEdit(); // Cancel edit when opening menu
-
-        this.contextMenu.style.left = `${x}px`;
-        this.contextMenu.style.top = `${y}px`;
-
-        const deleteButton = document.getElementById('delete-element');
-        const connectButton = document.getElementById('connect-element');
-        const editButton = document.getElementById('edit-properties');
-
-        // Safety check if buttons don't exist
-        if (!deleteButton || !connectButton || !editButton) {
-            console.error("Context menu buttons not found in DOM!");
-            return;
-        }
-
-        if (connection) { // Context menu for a connection
-            console.log(`Showing context menu for CONNECTION ${connection.id} at (${screenX}, ${screenY})`);
-            deleteButton.style.display = 'block';
-            connectButton.style.display = 'none';
-            editButton.style.display = 'none';
-            // Need temporary handler for deleting connection
-            // --- Add Check for deleteButton ---
-            if (!deleteButton) {
-                console.error("!!! deleteButton is NULL or UNDEFINED right before addEventListener !!!");
-           } else {
-                console.log("deleteButton reference seems valid just before addEventListener:", deleteButton);
-           }
-           // --- End Check ---
-           console.log("Assigning temporary console log onclick to deleteButton...");
-            deleteButton.onclick = () => {
-                console.log("Context menu: Delete Connection action", connection.id);
-                if (!connection || !this.connectionManager) {
-                    console.log(`Attempting to delete connection via context menu: ID=${connection?.id}`); // This should log
-                    this.hideContextMenu();
-                    return;
-                }
-                this.connectionManager.removeConnection(connection);
-                this.hideContextMenu(); // Hide after action
-            };
-            console.log("Temporary onclick assigned.");
-        } else if (this.selectedElement) { // Context menu for an element
-            deleteButton.style.display = 'block';
-            connectButton.style.display = 'block';
-            editButton.style.display = 'block';
-            // Restore default element delete handler (bound in constructor)
-            deleteButton.onclick = this.handleDeleteElement;
-            connectButton.onclick = this.handleConnectElement;
-            editButton.onclick = this.handleEditProperties;
-        } else {
-            // Hide if called without a valid target
-            this.hideContextMenu();
-            return;
-        }
-        this.contextMenu.style.display = 'block';
-        console.log("<<<shotContextMenu")
+        // Clear target connection reference
+        this.contextTargetConnection = null;
     }
 
     /** Hide context menu UI. */
@@ -427,218 +347,212 @@ class InteractionManager {
         }
     }
 
+    // --- CHANGE: Renamed showContextMenuForElement (logic remains similar) ---
+    /** Calculates position and shows the ELEMENT context menu relative to the element */
+    showElementContextMenu(element) {
+        if (!element || !this.elementContextMenu) return;
+
+        // Hide the other menu first
+        if (this.connectionContextMenu) this.connectionContextMenu.style.display = 'none';
+        this.contextTargetConnection = null;
+
+        const svgGroup = this.canvas.findOne(`#${element.id}`);
+        if (!svgGroup) return;
+
+        try {
+            const bbox = svgGroup.bbox();
+            const svgPoint = this.canvas.node.createSVGPoint();
+            svgPoint.x = bbox.x + bbox.width + 5; // Position top-right + offset
+            svgPoint.y = bbox.y;
+
+            const ctm = this.canvas.node.getScreenCTM();
+            if (!ctm) { throw new Error("Cannot get CTM"); }
+
+            const screenPoint = svgPoint.matrixTransform(ctm);
+
+            this.elementContextMenu.style.left = `${screenPoint.x}px`;
+            this.elementContextMenu.style.top = `${screenPoint.y}px`;
+            this.elementContextMenu.style.display = 'block';
+            console.log(`Showing element context menu for ${element.id}`);
+
+        } catch (err) {
+            console.error("Error calculating element context menu position:", err);
+            // Fallback: Show near element origin (less accurate)
+            this.elementContextMenu.style.left = `${element.x + element.width}px`;
+            this.elementContextMenu.style.top = `${element.y}px`;
+            this.elementContextMenu.style.display = 'block';
+        }
+    }
+
+    // --- NEW: showContextMenuForConnection ---
+    /** Shows the CONNECTION context menu at specific screen coordinates */
+    showContextMenuForConnection(connection, screenX, screenY) {
+        if (!connection || !this.connectionContextMenu) return;
+
+        // Hide the other menu first
+        if (this.elementContextMenu) this.elementContextMenu.style.display = 'none';
+        this.selectedElement = null; // Ensure no element seems selected
+
+        // Store the target connection for the delete handler
+        this.contextTargetConnection = connection;
+
+        // Position and show
+        this.connectionContextMenu.style.left = `${screenX}px`;
+        this.connectionContextMenu.style.top = `${screenY}px`;
+        this.connectionContextMenu.style.display = 'block';
+        console.log(`Showing connection context menu for ${connection.id}`);
+    }
+
     /** Show the inline name editor for an element. */
     showNameEditor(element) {
         if (!element) return;
-        // console.log(`>>> showNameEditor called for Element ID: ${element.id}`);
 
-        // hide the context menu 
-        this.hideContextMenu();
+        // --- Ensure menus are hidden when starting edit ---
+        this.hideAllContextMenus();
 
         // Cancel edit on any other element first
         if (this.currentEditingInput && this.selectedElement && this.selectedElement.id !== element.id) {
-            // console.log("--- Cancelling edit on previous element:", this.selectedElement.id);
-            this.cancelInlineEdit();
+            this.cancelInlineEdit(); // This will attempt to show menu, but we hide again below if needed
         }
         // Don't re-open if already editing this one
         if (this.currentEditingInput && this.selectedElement && this.selectedElement.id === element.id) {
-            // console.log("--- Already editing this element. Aborting.");
-            return;
+            return; // Already editing this one
         }
 
-        this.selectElement(element); // Ensure element is selected
+        // Ensure element is selected (this won't show context menu if called from here)
+        // We need to be careful not to trigger a menu show/hide loop
+        const shouldSelect = this.selectedElement !== element;
+        if (shouldSelect) {
+            this.selectedElement = element; // Manually set selection without triggering menu show
+            const svgElem = this.canvas.findOne(`#${element.id}`);
+            if (svgElem) svgElem.addClass('element-selected');
+        }
 
+        // Find SVG elements
         const svgGroup = this.canvas.findOne(`#${element.id}`);
         if (!svgGroup) { console.error(`!!! FAILED to find SVG Group for #${element.id}`); return; }
-        // console.log("   Found SVG Group:", svgGroup.node);
 
         const textElement = svgGroup.findOne('.element-display-text');
-        const foreignObjectWrapper = svgGroup.findOne('.element-editor-fobj'); // SVG.js wrapper
+        const foreignObjectWrapper = svgGroup.findOne('.element-editor-fobj');
 
         if (!textElement) { console.error(`!!! FAILED to find .element-display-text inside #${element.id}`); }
         if (!foreignObjectWrapper || !foreignObjectWrapper.node) { console.error(`!!! FAILED to find .element-editor-fobj or node inside #${element.id}`); return; }
-        // console.log("   Found ForeignObject Wrapper Node:", foreignObjectWrapper.node);
 
-        const foreignObjectNode = foreignObjectWrapper.node; // Raw <foreignObject> DOM node
-        const actualInputNode = foreignObjectNode.querySelector('input.element-name-input-inline'); // Find input inside
+        // Find HTML input inside foreignObject
+        const foreignObjectNode = foreignObjectWrapper.node;
+        const actualInputNode = foreignObjectNode.querySelector('input.element-name-input-inline');
 
         if (!actualInputNode) { console.error(`!!! FAILED to find input using querySelector!`); return; }
-        // console.log("   Found Actual Input Node via querySelector:", actualInputNode);
 
+        // Proceed if all elements found
         if (textElement && foreignObjectWrapper && actualInputNode) {
-            // Set visibility using 'visibility' attribute
-            // console.log("   Setting text visibility: hidden");
+            // Hide text, show foreignObject
             textElement.attr('visibility', 'hidden');
-            // console.log("   Setting fObj visibility: visible");
             foreignObjectWrapper.attr('visibility', 'visible');
 
             // Set input value
-            // console.log("   Setting input value.");
             actualInputNode.value = element.name || '';
 
-            // Focus and Select using setTimeout for reliability
-            // console.log("   Attempting focus/select on actual input node (async)...");
+            // Focus and Select input (using reliable setTimeout)
             try {
                 setTimeout(() => {
                     if (actualInputNode && typeof actualInputNode.focus === 'function') {
                         actualInputNode.focus();
                         if (typeof actualInputNode.select === 'function') {
                             actualInputNode.select();
-                            // console.log("   (async) Focus/Select successful.");
                         } else { console.error("   !!! (async) actualInputNode.select is NOT a function!"); }
                     } else { console.error("   !!! (async) actualInputNode or focus function missing!"); }
                 }, 0); // Defer execution slightly
             } catch (err) { console.error("   Focus/Select outer try/catch FAILED:", err); }
 
-            // Add KeyDown listener to the actual input node
-            // console.log("   Adding keydown listener to actual input node.");
+            // Add KeyDown listener to the input
             actualInputNode.removeEventListener('keydown', this.handleInlineEditorKeyDown); // Prevent duplicates
             actualInputNode.addEventListener('keydown', this.handleInlineEditorKeyDown);
-            this.currentEditingInput = actualInputNode; // Store reference to active input
 
-            // console.log("<<< showNameEditor finished successfully.");
+            // Store reference to the active input
+            this.currentEditingInput = actualInputNode;
+
         } else {
+            // Should not happen if checks passed, but good fallback
             console.error("!!! Aborting showNameEditor (logic error - missing elements).");
         }
     }
 
-    /** Hide the inline editor UI (visibility change). */
-    hideNameEditor() {
-        // Only needs to handle the UI visibility part.
-        if (!this.selectedElement) return; // Only relevant if an element is selected
-
+    // ** Hide the inline editor UI (visibility change). */
+    hideNameEditor() { // (Keep as is)
+        if (!this.selectedElement) return;
         const svgGroup = this.canvas.findOne(`#${this.selectedElement.id}`);
         if (!svgGroup) return;
-
         const textElement = svgGroup.findOne('.element-display-text');
         const foreignObjectElement = svgGroup.findOne('.element-editor-fobj');
-
         if (textElement && foreignObjectElement) {
-            if (foreignObjectElement.attr('visibility') !== 'hidden') {
-                // console.log("Hiding inline editor UI for:", this.selectedElement.id);
-                foreignObjectElement.attr('visibility', 'hidden');
-            }
-            if (textElement.attr('visibility') !== 'visible') {
-                textElement.attr('visibility', 'visible');
-            }
+            foreignObjectElement.attr('visibility', 'hidden');
+            textElement.attr('visibility', 'visible');
         }
     }
 
     /** Cancel the current inline edit: cleanup state and restore UI. */
-    // --- Bug 2 Fix: Added svgGroup/inputNode finding and checks ---
-    cancelInlineEdit() {
-        console.log(">>>cancelInlineEdit");
-        if (!this.selectedElement || !this.currentEditingInput) {
-            console.log("cancelInlineEdit: No element selected or no active input.");
-            return;
-        }
-        console.log("cancelInlineEdit: Cancelling inline edit for element:", this.selectedElement.id);
-
-        // --- FIX: Find svgGroup and inputNode *before* use ---
+    cancelInlineEdit() { // (Modify to hide menus, ensure element is selected for menu to reappear)
+        if (!this.selectedElement || !this.currentEditingInput) { return; }
+        console.log("Cancelling inline edit for element:", this.selectedElement.id);
         const svgGroup = this.canvas.findOne(`#${this.selectedElement.id}`);
-        const inputNode = this.currentEditingInput; // Get reference before clearing it
-        const element = this.selectedElement;
+        const inputNode = this.currentEditingInput;
+        const element = this.selectedElement; // Keep ref
 
-        // --- FIX: Add checks ---
-        if (!svgGroup) {
-            console.error(`cancelInlineEdit: Could not find SVG group for element ${this.selectedElement.id}`);
-            this.currentEditingInput = null; // Clear state anyway
-            return;
-        }
-        if (!inputNode) {
-            console.error(`cancelInlineEdit: currentEditingInput was null unexpectedly.`);
-            this.currentEditingInput = null; // Clear state
-            return;
-        }
-        // --- End FIX ---
+        if (!svgGroup || !inputNode) { this.currentEditingInput = null; return; }
 
         const textElement = svgGroup.findOne('.element-display-text');
         const foreignObjectElement = svgGroup.findOne('.element-editor-fobj');
 
-        // Cleanup state FIRST
-        // console.log("   Removing keydown listener.");
         inputNode.removeEventListener('keydown', this.handleInlineEditorKeyDown);
-        this.currentEditingInput = null; // Clear the state variable
+        this.currentEditingInput = null;
 
-        // Update UI
         if (textElement && foreignObjectElement) {
-            // Hide fObj
-            // console.log("   Setting fObj visibility: hidden");
             foreignObjectElement.attr('visibility', 'hidden');
-
-            // Restore original text content
-            textElement.text(this.selectedElement.name || this.selectedElement.type);
-
-            // Make text visible
-            // console.log("   Setting text visibility: visible");
+            textElement.text(element.name || element.type); // Use stored ref 'element'
             textElement.attr('visibility', 'visible');
-
+            // Reposition text (use the working method from handleSaveName)
             const groubBox = svgGroup.bbox();
             const textBbox = textElement.bbox();
             const textX = groubBox.x + (element.width - textBbox.width) / 2;
             const textY = groubBox.y + (element.height - textBbox.height) / 2;
-            textElement.center(textX, textY);
-        } else {
-            console.error("cancelInlineEdit: Could not find textElement or foreignObjectElement for UI update.");
+            textElement.center(textX, textY); // Or your working method
         }
-        console.log("<<< cancelInlineEdit finished.");
+
+        // --- CHANGE: Decide whether to show element menu again ---
+        // Since the element is still logically selected, show its menu.
+        this.showElementContextMenu(element); // Pass the element ref
     }
 
-
     /** Save the name from the current inline editor: update data, cleanup state, restore UI. */
-    handleSaveName() {
+    handleSaveName() { // (Modify to show menu after save)
+        if (!this.selectedElement || !this.currentEditingInput) { return; }
         console.log('>>>handleSaveName');
-        if (!this.selectedElement || !this.currentEditingInput) {
-            console.warn("handleSaveName: No selected element or input.");
-            return;
-        }
-
         const newName = this.currentEditingInput.value;
-        const element = this.selectedElement;
-        const inputNode = this.currentEditingInput; // Get reference before clearing
-
-        // --- Step 1: Find elements ---
+        const element = this.selectedElement; // Keep ref
+        const inputNode = this.currentEditingInput;
         const svgGroup = this.canvas.findOne(`#${element.id}`);
         const textElement = svgGroup?.findOne('.element-display-text');
         const foreignObjectElement = svgGroup?.findOne('.element-editor-fobj');
 
-        // --- Step 1a: Add Check ---
-        if (!svgGroup || !textElement || !foreignObjectElement) {
-            console.error("handleSaveName: Failed to find required SVG elements (group, text, fObj). Aborting save.");
-            // Cleanup state even on error
-            if (inputNode) inputNode.removeEventListener('keydown', this.handleInlineEditorKeyDown);
-            this.currentEditingInput = null;
-            return;
-        }
+        if (!svgGroup || !textElement || !foreignObjectElement) { /* Error Handling */ if (inputNode) inputNode.removeEventListener('keydown', this.handleInlineEditorKeyDown); this.currentEditingInput = null; return; }
 
-        console.log(`handleSaveName ${textElement}`);
-        // --- Step 2: Update text content ---
+        // Update text and position (using your working method)
         textElement.text(newName || element.type);
-
-        // --- Step 3: Make text visible BEFORE repositioning ---
         textElement.attr('visibility', 'visible');
-
-        // --- Step 4: Reposition the (now visible) text ---
         const groubBox = svgGroup.bbox();
         const textBbox = textElement.bbox();
         const textX = groubBox.x + (element.width - textBbox.width) / 2;
         const textY = groubBox.y + (element.height - textBbox.height) / 2;
-        textElement.center(textX, textY);
+        textElement.center(textX, textY); // Or your working method
 
-        // --- Check attributes AFTER setting ---
-        let finalX = textElement.attr('x');
-        let finalY = textElement.attr('y');
-        console.log(`   Final relative attributes: x=${finalX}, y=${finalY}`);
-
-        // --- Step 5: Hide the editor UI (foreignObject) ---
         foreignObjectElement.attr('visibility', 'hidden');
-
-        // --- Step 6: Cleanup state (listener, currentEditingInput) ---
         inputNode.removeEventListener('keydown', this.handleInlineEditorKeyDown);
         this.currentEditingInput = null;
-
-        // --- Step 7: Update element data model LAST ---
         element.name = newName;
+
+        // --- CHANGE: Show element context menu after saving ---
+        this.showElementContextMenu(element); // Element is still selected
 
         console.log("<<< handleSaveName finished.");
     }
@@ -655,44 +569,46 @@ class InteractionManager {
         // Allow other keys (letters, numbers, arrows, backspace, etc.)
     }
 
-    /** Select an element, updating visual state and handling deselection/edit cancellation. */
+    /** Select an element, updating visual state and handling context menu. */
     selectElement(element) {
-        // If trying to select the same element again, do nothing
         if (this.selectedElement === element) return;
 
-        // Deselect the previously selected element
+        // Deselect previous
         if (this.selectedElement) {
             const oldSvgElement = this.canvas.findOne(`#${this.selectedElement.id}`);
             if (oldSvgElement) {
                 oldSvgElement.removeClass('element-selected');
             }
-            // hide context menu 
-            this.hideContextMenu();
-            // If deselecting an element that was being edited, cancel the edit
-            // *** Bug 2 Fix: cancelInlineEdit needs to be called correctly ***
+            // If deselecting element being edited, cancel the edit first
             if (this.currentEditingInput && this.currentEditingInput.closest('.element')?.id === this.selectedElement.id) {
+                // cancelInlineEdit will now attempt to show menu, need to hide it again if element is null
                 this.cancelInlineEdit();
+                if (!element) { // If deselecting completely
+                    this.hideAllContextMenus();
+                }
+            } else {
+                // If not editing, just hide menus
+                this.hideAllContextMenus();
             }
         }
 
         // Set new selected element
         this.selectedElement = element;
 
-        // Add selected class to the new element
+        // Select new (if not null)
         if (element) {
             const newSvgElement = this.canvas.findOne(`#${element.id}`);
             if (newSvgElement) {
                 newSvgElement.addClass('element-selected');
-                // console.log("Selected element:", element.id);
-                this.showContextMenuForElement(element);
+                // --- CHANGE: Show the specific element menu ---
+                // Avoid showing if an edit was just cancelled and we deselected completely
+                if (!this.currentEditingInput) { // Don't show if edit is active
+                    this.showElementContextMenu(element);
+                }
             }
         } else {
-            // console.log("Deselected element");
-            // Ensure edit is cancelled if deselecting completely (clicking background)
-            // *** Bug 2 Fix: cancelInlineEdit needs to be called correctly ***
-            if (this.currentEditingInput) {
-                this.cancelInlineEdit();
-            }
+            // If element is null (deselected), ensure menus are hidden
+            this.hideAllContextMenus();
         }
     }
 
