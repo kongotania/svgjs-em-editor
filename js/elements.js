@@ -123,6 +123,9 @@ class Element {
         return { source: bestSourcePoint, target: bestTargetPoint };
     }
 
+    // elements.js
+    // class Element
+
     /**
      * Create an SVG representation of this element.
      * @param {SVG.Container} canvas - The SVG canvas to draw on.
@@ -146,54 +149,23 @@ class Element {
             group.text('🖥️').font({ size: 20 }).center(this.width / 2, this.height / 2);
         }
 
-        // Create Display Text (initially visible)
-        const text = group.text(this.name || this.type)
-            .font({ size: 12, family: 'Arial', anchor: 'middle' })
-            //.center(this.width / 2, this.height / 2)
-            .addClass('element-text') // For general styling
-            .addClass('element-display-text') // For finding later
-            .attr('visibility', 'visible')// Explicitly visible
-            .attr('dominant-baseline', 'middle'); 
-       
-        // Calculate position for middle anchor point
-        const textX = this.width / 2;
-        const textY = this.height / 2; // Adjust this slightly for better vertical alignment?
-        console.log(`Creando text ${text} ${textX} ${textY}`);
-        text.center(textX, textY); // Move the anchor point to the calculated center
-        
-        // Create ForeignObject (initially hidden)
-        const foreignObject = group.foreignObject(this.width, this.height) // Slightly smaller
+        // Create ForeignObject
+        const foreignObject = group.foreignObject(this.width, this.height)
             .attr({ x: 0, y: 0 })
-            .addClass('element-editor-fobj') // For finding later
-            .attr('visibility', 'hidden'); // Initially hidden
+            .addClass('element-editor-fobj')
+            //** Start change **
+            .attr('visibility', 'visible')      // Make it visible by default
+            .attr('pointer-events', 'none');    // Clicks pass through to SVG rect by default
+        //** End change **
 
-        // Create HTML Input using DOM methods inside ForeignObject
-        const editorWrapperDiv = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
-        editorWrapperDiv.setAttribute('style', `
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    padding: 5px; /* Add some padding */
-    box-sizing: border-box;
-`);
-        const inputElement = document.createElementNS('http://www.w3.org/1999/xhtml', 'input');
-        inputElement.setAttribute('type', 'text');
-        inputElement.setAttribute('class', 'element-name-input-inline'); // For finding later
-        inputElement.style.width = '100%';
-        // inputElement.style.height = '100%';
-        inputElement.style.border = '1px solid #ccc';
-        inputElement.style.padding = '4px';
-        inputElement.style.boxSizing = 'border-box';
-        inputElement.style.fontFamily = 'Arial';
-        inputElement.style.fontSize = '12px';
-        inputElement.style.textAlign = 'center'
-        // Append input to the centering div
-        editorWrapperDiv.appendChild(inputElement);
-        // foreignObject.node.appendChild(inputElement);
-        // Append the centering div to the foreignObject's raw node
-        foreignObject.node.appendChild(editorWrapperDiv);
+        // Create HTML contenteditable div inside ForeignObject
+        const contentDiv = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
+        contentDiv.setAttribute('class', 'element-content-div');
+        contentDiv.setAttribute('contenteditable', 'false');    // Not editable by default
+        contentDiv.textContent = this.name || this.type;        // Set initial text
+
+        foreignObject.node.appendChild(contentDiv);
+
         // Position the group
         group.move(this.x, this.y);
 
@@ -211,39 +183,37 @@ class Element {
             e.preventDefault();
             if (interactionManager) {
                 interactionManager.currentDraggingElement = this;
-                interactionManager.hideContextMenu();
-                if (interactionManager.currentEditingInput) {
-                    interactionManager.cancelInlineEdit(); // Cancel edit on drag start
+                //** Start change **
+                interactionManager.hideAllContextMenus(); // Use the correct hide function
+                if (interactionManager.currentEditingDiv) { // Check the correct property
+                    //** End change **
+                    interactionManager.cancelInlineEdit();
                 }
             }
             group.addClass('dragging');
         }).on('dragmove.namespace', (e) => {
             e.preventDefault();
             const { handler, box } = e.detail;
-            // Update internal coordinates
             this.x = box.x;
             this.y = box.y;
-            // Move the SVG group visually
             handler.move(box.x, box.y);
-            // Update connections efficiently
-            if (interactionManager?.connectionManager) { // Safety check
+            if (interactionManager?.connectionManager) {
                 interactionManager.connectionManager.updateConnectionsForElement(this);
             }
         }).on('dragend.namespace', (e) => {
             e.preventDefault();
-            const { handler, box } = e.detail;
+            const { handler, box } = e.detail; // box is fine here
             group.removeClass('dragging');
-            // Update final position (might be redundant but safe)
             this.x = box.x;
             this.y = box.y;
             if (interactionManager) {
                 interactionManager.currentDraggingElement = null;
             }
-            // TODO: Consider click handling here if simple clicks fail
         });
 
         return group;
     }
+    // End class Element
 }
 
 /**

@@ -162,26 +162,39 @@ body {
     stroke-width: 1px;
 }
 
-/* Style the display text within elements */
-.element-display-text {
+/* New styles for the content div inside foreignObject */
+.element-content-div {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
     font-family: Arial, sans-serif;
-    font-size: 12px;
-    fill: #333; /* Default text color */
-    pointer-events: none; /* Clicks pass through */
-    -webkit-user-select: none; /* Disable text selection */
+    font-size: 12px; /* Matches old .element-display-text */
+    color: #333;    /* Matches old .element-display-text */
+    padding: 5px;   /* Keeps text from touching edges */
+    box-sizing: border-box;
+    word-break: break-word; /* Handles long text */
+    overflow-wrap: break-word; /* Modern equivalent for word-break */
+    pointer-events: none; /* By default, clicks pass through to the SVG element */
+    -webkit-user-select: none; /* Disable text selection when not editing */
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
+    outline: none; /* Remove default focus outline on div */
 }
 
-/* Style the inline editor input (via its class) */
-.element-name-input-inline {
-    /* Styles applied directly in JS, but could add focus styles here */
+.element-content-div.editing {
+    pointer-events: auto; /* Allow interaction when editing */
+    -webkit-user-select: text; /* Allow text selection when editing */
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+    background-color: rgba(255, 255, 255, 0.7); /* Slight visual cue for editing */
+    outline: 1px solid #4CAF50; /* Focus indicator */
 }
-.element-name-input-inline:focus {
-     outline: 1px solid #4CAF50; /* Simple focus indicator */
-}
-
+/* ** End add ** */
 
 /* Highlighting for selected elements */
 .element-selected > .element-rect { /* Target the rect inside selected group */
