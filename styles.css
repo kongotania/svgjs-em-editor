@@ -182,7 +182,8 @@ body {
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
-    outline: none; /* Remove default focus outline on div */
+    outline: none;
+    white-space: pre-wrap;
 }
 
 .element-content-div.editing {
