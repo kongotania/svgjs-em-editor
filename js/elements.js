@@ -180,15 +180,29 @@ class Element {
 
         // Add Draggable behavior
         group.draggable().on('dragstart.namespace', (e) => {
+            console.log("Element dragstart");
             e.preventDefault();
             if (interactionManager) {
-                interactionManager.currentDraggingElement = this;
-                //** Start change **
-                interactionManager.hideAllContextMenus(); // Use the correct hide function
-                if (interactionManager.currentEditingDiv) { // Check the correct property
-                    //** End change **
-                    interactionManager.cancelInlineEdit();
+                interactionManager.currentDraggingElement = this; // 'this' is the element being dragged (e.g., E1)
+
+                // ** Start Change: Handle existing edit on a DIFFERENT element **
+                if (interactionManager.currentEditingDiv &&
+                    interactionManager.selectedElement && // selectedElement should be the one being edited
+                    interactionManager.selectedElement.id !== this.id) { // If editing a DIFFERENT element
+
+                    console.log(`Element.dragstart on ${this.id}: Detected active edit on different element ${interactionManager.selectedElement.id}. Saving it (no menu).`);
+                    interactionManager.handleSaveName(false); // Save the other element's edit, no menu for it
+                } else if (interactionManager.currentEditingDiv &&
+                    interactionManager.selectedElement &&
+                    interactionManager.selectedElement.id === this.id) {
+                    // Trying to drag the element that is currently being edited
+                    console.log(`Element.dragstart on ${this.id}: This element is currently being edited. Saving it (no menu) before drag.`);
+                    interactionManager.handleSaveName(false); // Save this element's edit, no menu
                 }
+                // ** End Change **
+
+                // Always hide context menus when a drag starts regardless of previous edit state
+                interactionManager.hideAllContextMenus();
             }
             group.addClass('dragging');
         }).on('dragmove.namespace', (e) => {

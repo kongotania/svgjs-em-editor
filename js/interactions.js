@@ -43,7 +43,9 @@ class InteractionManager {
 
         // --- CHANGE: No longer need to bind context menu handlers here ---
         // They will be added directly or use arrow functions in initEvents
-
+        this.clickTimeout = null;
+        this.lastClickTargetId = null; // Store the ID of the element from the first click
+        this.MAX_DBL_CLICK_TIME = 300; // Milliseconds for double click threshold
         // Initialize all event listeners
         this.initEvents();
     }
@@ -112,6 +114,7 @@ class InteractionManager {
 
         // Helper for actions that should save edit, then deselect
         const globalUiActionHandler = () => {
+            console.log(">>>globalUiActionHandler")
             if (this.currentEditingDiv && this.selectedElement) {
                 this.handleSaveName(false); // Save, no menu
                 this.selectElement(null);   // Deselect
@@ -124,10 +127,12 @@ class InteractionManager {
             globalUiActionHandler();
             this.setZoom(this.zoom * 1.2);
         });
+
         document.getElementById('zoom-out')?.addEventListener('click', () => {
             globalUiActionHandler();
             this.setZoom(this.zoom * 0.8);
         });
+
         document.getElementById('reset-view')?.addEventListener('click', () => {
             globalUiActionHandler();
             this.setZoom(1);
@@ -148,36 +153,62 @@ class InteractionManager {
 
         // Canvas drop zone setup
         this.canvas.node.addEventListener('dragover', e => {
+            console.log(">>>canvas dragover");
             e.preventDefault(); // Necessary to allow drop
             e.dataTransfer.dropEffect = 'copy';
         });
         this.canvas.node.addEventListener('drop', this.handleDrop);
     }
 
-    /** Mousedown on canvas: Initiate panning or cancel edits. */
-    handleCanvasMouseDown(e) { // (Keep as is)
+    handleCanvasMouseDown(e) {
+        // ** Keep your prominent log if you still want it, or use this one: **
+        console.log(`%c>>> handleCanvasMouseDown - Target: ${e.target?.id || e.target?.tagName}, currentEditingDiv: ${!!this.currentEditingDiv}`, "color: #FF8C00; font-weight: bold;");
+
         const target = e.target;
         const elementId = this.findElementId(target);
-        if (elementId) {
+
+        if (elementId) { // Mousedown on an element
+            // If currentEditingDiv is set AND it's for a DIFFERENT element than the one clicked
             if (this.currentEditingDiv && this.selectedElement && this.selectedElement.id !== elementId) {
-                this.cancelInlineEdit();
+                // The blur event on the div being edited should ideally handle saving.
+                // A mousedown on another element will cause the current editor to lose focus.
+                // So, we don't need to aggressively cancel/save here.
+                // Let blur + the subsequent click handler for the new element manage state.
+                console.log("    handleCanvasMouseDown: Mousedown on a different element while editing. Letting blur handle the active edit.");
+                // ** Start delete **
+                // this.cancelInlineEdit(); // Let blur handle this.
+                // ** End delete **
             }
-        } else {
+            // If mousedown is on the element *being* edited, do nothing here.
+            // Let click/dblclick/blur handlers manage it.
+        } else { // Mousedown on canvas background or connection (not an element)
+            // ** Start change - Remove premature edit cancellation **
+            // If an edit is active, a mousedown on the background will cause the editor div to blur.
+            // The blur handler (handleInlineEditorBlur) is responsible for saving the edit.
+            // We should NOT cancel or save the edit here in mousedown.
             if (this.currentEditingDiv) {
-                this.cancelInlineEdit();
+                console.log("    handleCanvasMouseDown: Mousedown on canvas BG while editing. Letting blur handle the edit.");
+                // ** Start delete **
+                // this.cancelInlineEdit(); // DO NOT CANCEL EDIT HERE
+                // ** End delete **
             }
-            if (e.button === 1 || e.buttons === 4 || this.isPanningKeyPressed) {
+            // ** End change **
+
+            // Panning logic (middle mouse or spacebar+left click)
+            if (e.button === 1 || e.buttons === 4 || (e.button === 0 && this.isPanningKeyPressed)) {
+                // If an edit was active, it will blur and save/cancel via its own handlers.
+                // Then panning can start.
                 this.isPanning = true;
                 this.panStartX = e.clientX;
                 this.panStartY = e.clientY;
                 this.canvas.node.style.cursor = 'grabbing';
-                e.preventDefault();
+                e.preventDefault(); // Prevent text selection during pan, etc.
             }
         }
     }
-
     /** Mousemove on canvas: Handle panning or update temporary connection line. */
     handleCanvasMouseMove(e) { // (Keep as is)
+        console.log(">>>handleCanvasMouseMove");
         if (this.isPanning) {
             const dx = e.clientX - this.panStartX;
             const dy = e.clientY - this.panStartY;
@@ -196,6 +227,7 @@ class InteractionManager {
 
     /** Mouseup on canvas: End panning. */
     handleCanvasMouseUp(e) {
+        console.log(">>>handleCanvasMouseUp");
         if (this.isPanning) {
             this.isPanning = false;
             // Reset cursor only if space isn't still held down
@@ -207,9 +239,16 @@ class InteractionManager {
         // Click actions (selection, connection end) are handled by 'click'
     }
 
-
     handleCanvasClick(e) {
         console.log(">>> handleCanvasClick - Target:", e.target?.id || e.target?.tagName, "Selected:", this.selectedElement?.id, "Editing:", this.currentEditingDiv ? this.currentEditingDiv.closest('.element')?.id : "null");
+
+        // ** Start Delete - old justDoubleClicked flag logic (if any) **
+        // if (this.justDoubleClicked) {
+        //     console.log("    handleCanvasClick: Ignoring click, assuming it was part of a handled double-click.");
+        //     this.justDoubleClicked = false; 
+        //     return;
+        // }
+        // ** End Delete **
 
         const target = e.target;
         const elementId = this.findElementId(target);
@@ -219,72 +258,92 @@ class InteractionManager {
             const clickedElement = this.elementManager.getElementById(elementId);
             if (!clickedElement) return;
 
-            if (this.connectionManager.connectionMode) { // Completing a connection
-                if (this.currentEditingDiv && this.selectedElement) { // If source element was being edited
-                    this.handleSaveName(false); // Save it, no menu
-                }
-                // Ensure source element is no longer "selected" in a way that its menu would show
-                if (this.selectedElement !== clickedElement && this.selectedElement === this.connectionManager.sourceElement) {
-                    const oldSelectedSvg = this.canvas.findOne(`#${this.selectedElement.id}`);
-                    oldSelectedSvg?.removeClass('element-selected'); // Visually deselect if not target
-                }
-                this.connectionManager.completeConnection(clickedElement);
-                e.stopPropagation(); return;
+            // Clear any pending single click action because a new click has occurred
+            if (this.clickTimeout) {
+                clearTimeout(this.clickTimeout);
+                this.clickTimeout = null;
+                console.log("    handleCanvasClick: Cleared pending single click due to new click on element.");
             }
+            this.lastClickTargetId = elementId; // Store ID for dblclick check
 
-            if (this.currentEditingDiv && this.selectedElement?.id === clickedElement.id) {
-                // Clicked on the element being edited
-                if (target.classList.contains('element-content-div')) {
-                    console.log("    handleCanvasClick: Click inside contentEditable div of editing element. Allowing text interaction.");
-                    return; // Allow click for text manipulation inside div
+            this.clickTimeout = setTimeout(() => {
+                console.log(`    handleCanvasClick (TIMEOUT EXPIRED for ${elementId}): Executing single click logic.`);
+                this.clickTimeout = null; // Clear the timeout ID
+                this.lastClickTargetId = null; // Clear the target
+
+                // Proceed with single click logic only if a double click didn't cancel this
+                if (this.connectionManager.connectionMode) {
+                    if (this.currentEditingDiv && this.selectedElement) {
+                        this.handleSaveName(false);
+                    }
+                    if (this.selectedElement !== clickedElement && this.selectedElement === this.connectionManager.sourceElement) {
+                        const oldSelectedSvg = this.canvas.findOne(`#${this.selectedElement.id}`);
+                        oldSelectedSvg?.removeClass('element-selected');
+                    }
+                    this.connectionManager.completeConnection(clickedElement);
+                    // e.stopPropagation(); // Not available in setTimeout, but action is done.
+                    return;
                 }
-                // Clicked on rect/border of element being edited
-                console.log("    handleCanvasClick: Clicked on rect/border of currently edited element. Saving and showing menu.");
-                this.handleSaveName(true); // Save, show menu for this element
-                e.stopPropagation(); return;
-            }
 
-            // Click on an element NOT currently being edited, OR an element different from the one being edited
-            if (this.currentEditingDiv && this.selectedElement && this.selectedElement.id !== clickedElement.id) {
-                console.log(`    handleCanvasClick: Was editing ${this.selectedElement.id}, now clicking ${clickedElement.id}. Saving previous.`);
-                this.handleSaveName(false); // Save previous edit, no menu for it
-            }
+                if (this.currentEditingDiv && this.selectedElement?.id === clickedElement.id) {
+                    if (target.classList.contains('element-content-div')) { // target might be stale here, better to re-check class on currentEditingDiv
+                        console.log("    handleCanvasClick (TIMEOUT): Click inside contentEditable div. Allowing text interaction (already happened).");
+                        return;
+                    }
+                    console.log("    handleCanvasClick (TIMEOUT): Clicked on rect/border of currently edited element. Saving and showing menu.");
+                    this.handleSaveName(true);
+                    return;
+                }
 
-            // Toggle selection logic
-            if (this.selectedElement === clickedElement) { // Clicked on already selected element
-                console.log(`    handleCanvasClick: Clicked on already selected element ${clickedElement.id}. Deselecting (toggle off).`);
-                this.selectElement(null);
-            } else { // Clicked on a new or unselected element
-                console.log(`    handleCanvasClick: Clicked on new/unselected element ${clickedElement.id}. Selecting.`);
-                this.selectElement(clickedElement);
-            }
-            e.stopPropagation(); return;
+                if (this.currentEditingDiv && this.selectedElement && this.selectedElement.id !== clickedElement.id) {
+                    console.log(`    handleCanvasClick (TIMEOUT): Was editing ${this.selectedElement.id}, now clicking ${clickedElement.id}. Saving previous.`);
+                    this.handleSaveName(false);
+                }
+
+                if (this.selectedElement === clickedElement) {
+                    console.log(`    handleCanvasClick (TIMEOUT): Clicked on already selected element ${clickedElement.id}. Deselecting (toggle off).`);
+                    this.selectElement(null);
+                } else {
+                    console.log(`    handleCanvasClick (TIMEOUT): Clicked on new/unselected element ${clickedElement.id}. Selecting.`);
+                    this.selectElement(clickedElement);
+                }
+            }, this.MAX_DBL_CLICK_TIME); // Wait for a potential double click
+
+            e.stopPropagation(); // Stop propagation for the immediate click event
+            return; // IMPORTANT: Return here, logic is now in setTimeout
         }
 
-        // --- Click on a Connection ---
+        // --- Click on a Connection or Empty Canvas (if not an element click) ---
+        // Clear any pending single click on an element if we click elsewhere
+        if (this.clickTimeout) {
+            clearTimeout(this.clickTimeout);
+            this.clickTimeout = null;
+            this.lastClickTargetId = null;
+            console.log("    handleCanvasClick: Clicked elsewhere, cleared pending single click on element.");
+        }
+
         const connectionId = this.findConnectionId(target);
         if (connectionId) {
+            // ... (connection click logic as before) ...
             const connection = this.connectionManager.connections.find(c => c.id === connectionId);
             if (connection) {
                 if (this.currentEditingDiv && this.selectedElement) {
-                    this.handleSaveName(false); // Save edit, no menu
+                    this.handleSaveName(false);
                 }
-                this.selectElement(null); // Deselect any element
+                this.selectElement(null);
                 this.showContextMenuForConnection(connection, e.clientX, e.clientY);
                 e.stopPropagation();
             }
             return;
         }
 
-        // --- Click on Empty Canvas Background ---
+        // Click on Empty Canvas Background
         console.log("    handleCanvasClick: Clicked on canvas background.");
-        // If an edit was active, its blur handler (handleInlineEditorBlur) should have called handleSaveName(false).
-        // Now, we just ensure deselection.
         if (this.currentEditingDiv && this.selectedElement) {
-            console.log("        handleCanvasClick: An edit was active. Blur should have saved. Forcing save just in case & deselecting.");
-            this.handleSaveName(false); // Ensure save, no menu
+            console.log("        handleCanvasClick: An edit was active. Blur should have saved. Forcing save & deselecting.");
+            this.handleSaveName(false);
         }
-        this.selectElement(null); // Deselect any element (will also hide menus)
+        this.selectElement(null);
 
         if (this.connectionManager.connectionMode) {
             this.connectionManager.cancelConnection();
@@ -292,6 +351,7 @@ class InteractionManager {
     }
 
     handleDoubleClick(e) {
+        console.log(">>>handleDoubleClick");
         const target = e.target;
         if (target.classList.contains('element-content-div') && target.contentEditable === 'true') {
             return;
@@ -299,14 +359,28 @@ class InteractionManager {
 
         const elementId = this.findElementId(target);
         if (elementId) {
+            // ** Start Change: Double click cancels pending single click **
+            if (this.clickTimeout && this.lastClickTargetId === elementId) {
+                clearTimeout(this.clickTimeout);
+                this.clickTimeout = null;
+                this.lastClickTargetId = null;
+                console.log(`    handleDoubleClick: Double-click on ${elementId}, cleared pending single click action.`);
+            }
+            // ** End Change **
+
             const element = this.elementManager.getElementById(elementId);
             if (element) {
+                console.log("    handleDoubleClick: Hiding menus before starting editor for", element.id);
+                this.hideAllContextMenus();
                 if (this.currentEditingDiv && this.selectedElement && this.selectedElement.id !== element.id) {
-                    this.handleSaveName(false); // Save previous edit, no menu
+                    this.handleSaveName(false);
                 }
-                // No need to call selectElement here, showNameEditor will handle selection state
-                // and ensure menus are hidden before editor appears.
-                this.showNameEditor(element); // This will hide context menu
+
+                // ** Start Delete - old justDoubleClicked flag logic **
+                // this.justDoubleClicked = true; 
+                // ** End Delete **
+
+                this.showNameEditor(element);
                 e.stopPropagation();
             }
         }
@@ -314,7 +388,7 @@ class InteractionManager {
 
     /** Global KeyDown handler. */
     handleKeyDown(e) {
-        console.log(`%cGlobal handleKeyDown: Key='${e.key}', currentEditingDiv=${!!this.currentEditingDiv}, selectedElement=${this.selectedElement?.id}`, "background: #f0f8ff; color: #333;");
+        console.log(`>>> handleKeyDown: Key='${e.key}', currentEditingDiv=${!!this.currentEditingDiv}, selectedElement=${this.selectedElement?.id}`);
 
         if (this.currentEditingDiv) { // If an edit is active
             if (e.key === 'Escape') {
@@ -372,6 +446,7 @@ class InteractionManager {
 
     /** Handle drop from palette onto canvas. */
     handleDrop(e) {
+        console.log(">>> handledrop");
         e.preventDefault();
         // console.log(">>> handleDrop");
         if (this.currentEditingDiv) this.cancelInlineEdit(); // Cancel any active edit
@@ -408,6 +483,7 @@ class InteractionManager {
     }
     /** Hide context menu UI. */
     hideContextMenu() {
+        console.log(">>>hideContexMenu");
         if (this.contextMenu && this.contextMenu.style.display !== 'none') {
             // console.log("Hiding context menu");
             this.contextMenu.style.display = 'none';
@@ -459,6 +535,7 @@ class InteractionManager {
     // --- NEW: showContextMenuForConnection ---
     /** Shows the CONNECTION context menu at specific screen coordinates */
     showContextMenuForConnection(connection, screenX, screenY) {
+        console.log(">>>showContextMenuForConnection");
         if (!connection || !this.connectionContextMenu) return;
 
         // Hide the other menu first
@@ -575,10 +652,35 @@ class InteractionManager {
         contentDivNode.removeEventListener('keydown', this.handleInlineEditorKeyDown);
         contentDivNode.addEventListener('keydown', this.handleInlineEditorKeyDown);
 
+        console.log("    showNameEditor: About to add BLUR listener. contentDivNode exists:", !!contentDivNode);
+        console.log("        showNameEditor: this.handleInlineEditorBlur is function:", typeof this.handleInlineEditorBlur === 'function');
         contentDivNode.removeEventListener('blur', this.handleInlineEditorBlur);
         contentDivNode.addEventListener('blur', this.handleInlineEditorBlur);
         console.log("    showNameEditor: Added keydown and blur listeners to contentDivNode.");
 
+        try {
+            setTimeout(() => {
+                // ** Start Add: Log before focus **
+                console.log("    showNameEditor (setTimeout): Attempting to focus contentDivNode. Current activeElement:", document.activeElement?.id || document.activeElement?.tagName);
+                // ** End Add **
+                if (contentDivNode && typeof contentDivNode.focus === 'function') {
+                    contentDivNode.focus({ preventScroll: true });
+                    // ** Start Add: Log after focus **
+                    console.log("    showNameEditor (setTimeout): Called focus(). New activeElement:", document.activeElement?.id || document.activeElement?.tagName);
+                    // ** End Add **
+                    if (document.activeElement === contentDivNode) {
+                        const range = document.createRange();
+                        range.selectNodeContents(contentDivNode);
+                        const selection = window.getSelection();
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+                        console.log("        showNameEditor (setTimeout): Text selected.");
+                    } else {
+                        console.warn("        showNameEditor (setTimeout): Focus call did NOT result in contentDivNode being activeElement.");
+                    }
+                }
+            }, 0);
+        } catch (err) { console.error("   Focus/Select outer try/catch FAILED:", err); }
 
         this.currentEditingDiv = contentDivNode;
         console.log("<<< showNameEditor finished for:", element.id, "currentEditingDiv set.");
@@ -624,6 +726,8 @@ class InteractionManager {
     }
 
     handleSaveName(showMenuAfter = true) {
+        console.log(`%c>>> handleSaveName ENTRY. Parameter showMenuAfter = ${showMenuAfter}. For element: ${this.selectedElement?.id}, currentEditingDiv exists: ${!!this.currentEditingDiv}`, "background: #d0f0d0; color: darkgreen;");
+
         const elementToSave = this.selectedElement;
         const divToSaveFrom = this.currentEditingDiv;
 
@@ -660,7 +764,7 @@ class InteractionManager {
         divToSaveFrom.removeEventListener('blur', this.handleInlineEditorBlur);
 
         elementToSave.name = newName || elementToSave.type;
-        divToSaveFrom.innerText = elementToSave.name; 
+        divToSaveFrom.innerText = elementToSave.name;
 
         this.currentEditingDiv = null;
 
@@ -674,11 +778,9 @@ class InteractionManager {
         console.log(`%c<<< handleSaveName for ${elementToSave.id} finished. New name: ${elementToSave.name}`, "background: #e0ffe0; color: green;");
     }
 
-
-
     /** Handle Enter/Escape keys within the inline editor input. */
     handleInlineEditorKeyDown(e) {
-        console.log(`%cInlineEditorKeyDown: Key='${e.key}' on div for ${this.selectedElement?.id}`, "background: #lightyellow; color: #333;");
+        console.log(`>>>InlineEditorKeyDown: Key='${e.key}' on div for ${this.selectedElement?.id}`);
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             this.handleSaveName(true); // Enter from editor saves and shows menu
@@ -690,50 +792,78 @@ class InteractionManager {
         }
     }
 
+    // interactions.js
+    // class InteractionManager
+
     handleInlineEditorBlur(e) {
-        console.log(">>> handleInlineEditorBlur. currentEditingDiv:", this.currentEditingDiv ? "exists" : "null", "relatedTarget:", e.relatedTarget);
-        if (!this.currentEditingDiv) { // Already handled by Enter/Esc or other means
-            console.log("    handleInlineEditorBlur: No currentEditingDiv, exiting.");
+        console.log(">>> handleInlineEditorBlur. currentEditingDiv:", this.currentEditingDiv ? `for ${this.currentEditingDiv.closest('.element')?.id}` : "null", "relatedTarget:", e.relatedTarget?.id || e.relatedTarget?.tagName || e.relatedTarget);
+
+        const divBeingEdited = this.currentEditingDiv;
+        const elementBeingEdited = this.selectedElement;
+
+        if (!divBeingEdited || !elementBeingEdited) {
+            console.log("    handleInlineEditorBlur: No currentEditingDiv or selectedElement, exiting early.");
             return;
         }
 
         const relatedTarget = e.relatedTarget;
-        const divBeingEdited = this.currentEditingDiv; // Keep ref
 
         setTimeout(() => {
-            console.log("    handleInlineEditorBlur (setTimeout): Checking state.");
-            // Check if we are still in an editing state for *this specific div*
-            // (currentEditingDiv might have been cleared by a rapid subsequent action)
+            console.log("    handleInlineEditorBlur (setTimeout): Checking state. CurrentEditingDiv still for:", this.currentEditingDiv ? this.currentEditingDiv.closest('.element')?.id : "null", "Active document element:", document.activeElement?.id || document.activeElement?.tagName);
+
+            // Only proceed if the edit wasn't already finalized by another action (e.g. Enter/Esc in the div)
             if (this.currentEditingDiv === divBeingEdited) {
-                // If focus moved to something that isn't part of our UI that manages edit state
-                // (like context menu buttons which would call save/cancel themselves, or another element)
-                // then consider it a "blur away" that should save.
-                let shouldSave = true;
+                let shouldAttemptToFinalize = true;
+                let showMenuForThisElementAfterSave = false; // Default: blur does not show menu for the item losing focus
+                // ** Start Add: Detailed logging for relatedTarget conditions **
+                console.log(`        handleInlineEditorBlur (setTimeout ${currentTimestamp}): Initial decision: shouldAttemptToFinalize=${shouldAttemptToFinalize}, showMenuForThisElementAfterSave=${showMenuForThisElementAfterSave}`);
+                const relatedTargetElement = relatedTarget ? relatedTarget.closest('.element') : null;
+                console.log(`        handleInlineEditorBlur (setTimeout ${currentTimestamp}): relatedTargetElement found: ${relatedTargetElement?.id}`);
+                // ** End Add **
                 if (relatedTarget) {
                     if (relatedTarget.closest('.context-menu') ||
+                        relatedTarget === document.body || // Focus might go to body before a menu item click is processed
                         relatedTarget.closest('.controls button') ||
                         relatedTarget.closest('.palette-item')) {
-                        console.log("        handleInlineEditorBlur (setTimeout): Focus moved to control/menu/palette. Deferring save/cancel decision.");
-                        shouldSave = false; // Let the click handler for these items decide
-                    } else if (relatedTarget.closest('.element')) {
-                        console.log("        handleInlineEditorBlur (setTimeout): Focus moved to another element. Will save.");
-                        // The click on the other element will handle its own selection and menu.
-                        // We just need to make sure this one saves without its own menu popping up.
-                        this.handleSaveName(false); // Save WITHOUT showing menu for *this* element
-                        shouldSave = false; // Already handled
+                        console.log("        handleInlineEditorBlur (setTimeout): Focus likely moved to UI control/menu/palette. Deferring action to that control's click handler.");
+                        shouldAttemptToFinalize = false; // Let the specific click handler for these items decide to save/cancel.
+                    } else if (relatedTarget.closest('.element')) { // Clicked on an SVG element
+                        if (relatedTarget.closest('.element').id !== elementBeingEdited.id) {
+                            // Blurred to a DIFFERENT element
+                            console.log("        handleInlineEditorBlur (setTimeout): Focus moved to ANOTHER element. Will save this one (no menu).");
+                            showMenuForThisElementAfterSave = false;
+                        } else {
+                            // Blurred to the SAME element's non-editable area (e.g., its rect)
+                            console.log("        handleInlineEditorBlur (setTimeout): Focus moved within the SAME element's non-editable area. Will save (and show menu).");
+                            showMenuForThisElementAfterSave = true;
+                        }
+                    } else {
+                        // Blurred to something else within the document that's not an element, control, or menu (e.g., SVG canvas itself)
+                        console.log("        handleInlineEditorBlur (setTimeout): Focus moved away to general document area (e.g. canvas bg). Will save (no menu).");
+                        showMenuForThisElementAfterSave = false;
                     }
+                } else if (document.activeElement !== divBeingEdited && document.activeElement !== window) {
+                    // No relatedTarget (e.g., blurred to browser chrome, another window, or just lost focus)
+                    // AND the active element is no longer the div (and not the window itself which can sometimes be activeElement)
+                    console.log("        handleInlineEditorBlur (setTimeout): Focus moved outside document or to body, and not to the div. Will save (no menu).");
+                    showMenuForThisElementAfterSave = false;
+                } else {
+                    // Div might still have focus, or relatedTarget is null but focus didn't clearly move from div.
+                    // Or activeElement is window.
+                    console.log("        handleInlineEditorBlur (setTimeout): Div may still have focus or no clear focus change indication. No save action from this blur.");
+                    shouldAttemptToFinalize = false;
                 }
-
-                if (shouldSave) {
-                    // If focus truly moved away to something like canvas background or outside the window
-                    console.log("        handleInlineEditorBlur (setTimeout): Focus moved away. Saving.");
-                    this.handleSaveName(false); // Save, but DON'T show menu (as it's a blur to background)
-                    // This will also trigger deselect if it was a click on canvas bg.
+                // ** Start Add: Log final decision values **
+                console.log(`        handleInlineEditorBlur (setTimeout ${currentTimestamp}): Before calling save: shouldAttemptToFinalize=${shouldAttemptToFinalize}, showMenuForThisElementAfterSave=${showMenuForThisElementAfterSave} for ${elementBeingEdited.id}`);
+                // ** End Add **
+                if (shouldAttemptToFinalize) {
+                    console.log(`        handleInlineEditorBlur (setTimeout): FINAL DECISION - Calling handleSaveName(${showMenuForThisElementAfterSave}) for ${elementBeingEdited.id}`);
+                    this.handleSaveName(showMenuForThisElementAfterSave);
                 }
             } else {
-                console.log("        handleInlineEditorBlur (setTimeout): Edit was already finalized or switched. No action from this blur.");
+                console.log("        handleInlineEditorBlur (setTimeout): Edit on original div was already finalized or switched (e.g. by Enter/Esc). No action from this blur.");
             }
-        }, 0); // Short delay
+        }, 0); // A short delay is good practice for blur handlers
     }
 
     selectElement(element) {
@@ -812,6 +942,7 @@ class InteractionManager {
 
     /** Set canvas zoom level and update viewbox. */
     setZoom(zoom) {
+        console.log(">>>setZoom");
         zoom = Math.max(0.2, Math.min(3, zoom)); // Clamp zoom level
         if (this.zoom === zoom) return; // No change
 
