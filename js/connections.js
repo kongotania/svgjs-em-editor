@@ -26,8 +26,9 @@ class ConnectionManager {
      * @param {Element} element - The source element.
      */
     startConnection(element) {
+        console.log(">>> startConnection", { elementId: element.id, currentMode: this.connectionMode });
+
         if (!element) return;
-        // console.log(">>> startConnection", { elementId: element.id, currentMode: this.connectionMode });
         if (this.connectionMode) {
             // console.warn("Already in connection mode, cancelling previous.");
             this.cancelConnection(); // Ensure cleanup if called unexpectedly
@@ -45,7 +46,7 @@ class ConnectionManager {
 
         // Apply the global marker using .attr()
         this.tempConnection.attr('marker-end', 'url(#arrowhead-marker)');
-        // console.log("<<< startConnection finished", { newMode: this.connectionMode, source: this.sourceElement.id });
+        console.log("<<< startConnection finished", { newMode: this.connectionMode, source: this.sourceElement.id });
     }
 
     /**
@@ -104,11 +105,14 @@ class ConnectionManager {
      * @returns {Connection | null} - The created Connection object, or null if invalid/cancelled.
      */
     completeConnection(targetElement) {
-        // console.log(">>> completeConnection", { targetId: targetElement?.id, currentMode: this.connectionMode, source: this.sourceElement?.id });
+        console.log(">>> completeConnection", { targetId: targetElement?.id, currentMode: this.connectionMode, source: this.sourceElement?.id });
         if (!this.connectionMode || !this.sourceElement) {
-            // console.warn("completeConnection called but not in connection mode or no source.");
+             console.warn("completeConnection called but not in connection mode or no source.");
             // Ensure temp line is removed even if called incorrectly
-            if (this.tempConnection) { this.tempConnection.remove(); this.tempConnection = null; }
+            if (this.tempConnection) { 
+                this.tempConnection.remove(); 
+                    this.tempConnection = null;
+                 }
             return null;
         }
 
@@ -155,7 +159,7 @@ class ConnectionManager {
         // Draw the final connection SVG
         connection.createSVG(this.canvas); // createSVG applies the marker
 
-        // console.log("<<< completeConnection finished successfully", { connectionId: connection.id });
+        console.log("<<< completeConnection finished successfully", { connectionId: connection.id });
         return connection;
     }
 
@@ -163,7 +167,7 @@ class ConnectionManager {
      * Cancel the current connection operation explicitly.
      */
     cancelConnection() {
-        // console.log(">>> cancelConnection", { currentMode: this.connectionMode });
+        console.log(">>> cancelConnection", { currentMode: this.connectionMode });
         if (!this.connectionMode) return;
 
         // Remove temporary line if it exists
@@ -175,7 +179,7 @@ class ConnectionManager {
         // Reset state
         this.connectionMode = false;
         this.sourceElement = null;
-        // console.log("<<< cancelConnection finished");
+        console.log("<<< cancelConnection finished");
     }
 
     /**
@@ -226,7 +230,7 @@ class ConnectionManager {
      */
     updateConnectionsForElement(element) {
         if (!element) return;
-        // console.log(`>>> updateConnectionsForElement for: ${element.id}`);
+        console.log(`>>> updateConnectionsForElement for: ${element.id}`);
         const connectionsToUpdate = this.connections.filter(conn =>
             conn.sourceElement.id === element.id || conn.targetElement.id === element.id
         );
@@ -247,7 +251,7 @@ class ConnectionManager {
                 connection.createSVG(this.canvas);
             }
         });
-        // console.log(`<<< updateConnectionsForElement finished for: ${element.id}`);
+        console.log(`<<< updateConnectionsForElement finished for: ${element.id}`);
     }
 
     /**
@@ -255,7 +259,7 @@ class ConnectionManager {
      * Should only be used if a global redraw is needed (e.g., after zoom if routing changes).
      */
     updateConnections() {
-        // console.log(">>> updateConnections (Global) called");
+        console.log(">>> updateConnections (Global) called");
         this.connections.forEach(connection => {
             const svgConnection = this.canvas.findOne(`#${connection.id}`);
             if (svgConnection) {
@@ -269,7 +273,7 @@ class ConnectionManager {
                 connection.createSVG(this.canvas);
             }
         });
-        // console.log("<<< updateConnections (Global) finished");
+        console.log("<<< updateConnections (Global) finished");
     }
 
     /**

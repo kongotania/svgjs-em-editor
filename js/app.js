@@ -28,6 +28,7 @@ class ElementManager {
      * @returns {Element | null} - Created element or null if failed.
      */
     createElement(type, x, y, name = '') {
+        console.log(">>>createElement");
         const element = new Element(type, x, y, name);
 
         // Basic collision avoidance: Check and offset slightly if needed.
@@ -41,8 +42,8 @@ class ElementManager {
             attempts++;
         }
         if (this.hasCollision(element)) {
-             console.warn(`Could not place element ${element.id} without collision after ${attempts} attempts.`);
-             // Decide whether to place anyway or fail: element = null; // Example: fail
+            console.warn(`Could not place element ${element.id} without collision after ${attempts} attempts.`);
+            // Decide whether to place anyway or fail: element = null; // Example: fail
         }
 
         if (element) {
@@ -57,7 +58,7 @@ class ElementManager {
                 element.createSVG(this.canvas, null);
             }
         }
-
+        console.log("<<<createElement");
         return element;
     }
 
@@ -67,14 +68,14 @@ class ElementManager {
      * @returns {boolean} - True if collision exists.
      */
     hasCollision(element) {
-        if (element.type === ELEMENT_TYPES.SLICE) return false; // Slices don't collide
-
+        if (element.type === ELEMENT_TYPES.SLICE)
+            return false; // Slices don't collide
         for (const other of this.elements) {
             // Don't check against self, and ignore slices
             if (other.id !== element.id && other.type !== ELEMENT_TYPES.SLICE) {
-                 if (element.overlaps(other)) { // Use the Element's overlap method
-                     return true;
-                 }
+                if (element.overlaps(other)) { // Use the Element's overlap method
+                    return true;
+                }
             }
         }
         return false;
@@ -85,7 +86,11 @@ class ElementManager {
      * @param {Element} element - Element to remove.
      */
     removeElement(element) {
-        if (!element) return;
+        console.log(">>>removeElement");
+        if (!element) {
+            console.warn("   Incorrect value for element");
+            return;
+        }
 
         // --- Remove Associated Connections ---
         if (this.interactionManager?.connectionManager) { // Safely access connectionManager
@@ -115,6 +120,7 @@ class ElementManager {
         } else {
             console.warn(`Element ${element.id} not found in elements list during removal.`);
         }
+        console.log("<<<removeElement");
     }
 
     /**
@@ -123,8 +129,11 @@ class ElementManager {
      * @param {Element} element - Element to update.
      */
     updateElement(element) {
-        if (!element) return;
-        // console.log("Updating element SVG:", element.id);
+        console.log(">>>updateElement");
+        if (!element) {
+            console.log("   Invalid Element");
+            return;
+        }
         // Remove old SVG
         const svgElement = this.canvas.findOne(`#${element.id}`);
         if (svgElement) {
@@ -132,12 +141,12 @@ class ElementManager {
         }
         // Create new SVG (passing interactionManager is crucial for re-attaching draggable)
         if (this.interactionManager) {
-             element.createSVG(this.canvas, this.interactionManager);
+            element.createSVG(this.canvas, this.interactionManager);
         } else {
-             console.error("InteractionManager not set when updating element SVG!");
-             element.createSVG(this.canvas, null);
+            console.error("InteractionManager not set when updating element SVG!");
+            element.createSVG(this.canvas, null);
         }
-
+        console.log("<<<updateElement");
     }
 
     /** Get element by ID. */
@@ -150,7 +159,7 @@ class ElementManager {
  * Initialize the application: setup SVG canvas, define global marker, create managers.
  */
 function initApp() {
-    console.log('Event modeling application starting...');
+    console.log('>>>initApp Event modeling application starting...');
     const canvas = SVG().addTo('#drawing-area').size('100%', '100%');
 
     // Set initial viewbox
@@ -161,7 +170,6 @@ function initApp() {
         console.error("#drawing-area element not found!");
         return; // Stop initialization if container missing
     }
-
 
     // --- Define Global Arrowhead Marker ---
     canvas.defs().marker(10, 10, function (add) { // ViewBox 10x10
@@ -193,7 +201,7 @@ function initApp() {
         interactionManager
     };
 
-    console.log('Event modeling application initialized.');
+    console.log('<<<initApp Event modeling application initialized.');
 } // End initApp function
 
 // --- Start Initialization ---

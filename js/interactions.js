@@ -54,6 +54,7 @@ class InteractionManager {
      * Initialize all event listeners for canvas, document, UI controls.
      */
     initEvents() {
+        console.log(">>>initEvents");
         // Canvas interaction listeners
         this.canvas.node.addEventListener('mousedown', this.handleCanvasMouseDown);
         this.canvas.node.addEventListener('mousemove', this.handleCanvasMouseMove);
@@ -158,6 +159,7 @@ class InteractionManager {
             e.dataTransfer.dropEffect = 'copy';
         });
         this.canvas.node.addEventListener('drop', this.handleDrop);
+        console.log("<<<initEvents");
     }
 
     handleCanvasMouseDown(e) {
