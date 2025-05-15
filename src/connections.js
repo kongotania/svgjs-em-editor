@@ -3,11 +3,12 @@
  *
  * Defines the ConnectionManager class for handling connection creation and management.
  */
+import { Connection } from './elements.js';
 
 /**
  * ConnectionManager - Handles the creation and management of connections between elements.
  */
-class ConnectionManager {
+export class ConnectionManager {
     /**
      * @param {SVG.Container} canvas - The main SVG canvas.
      * @param {ElementManager} elementManager - Reference to manage elements.

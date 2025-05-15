@@ -3,11 +3,16 @@
  *
  * Main application file. Initializes SVG canvas, managers, global marker, and event listeners.
  */
-
+import { SVG, extend as SVGextend } from '@svgdotjs/svg.js';
+import '@svgdotjs/svg.draggable.js';
+import './style.css';
+import { Element, ELEMENT_TYPES } from './elements.js'; // Element class and ELEMENT_TYPES constant
+import { ConnectionManager } from './connections.js';
+import { InteractionManager } from './interactions.js';
 /**
  * ElementManager - Manages element creation, deletion, collision, and updates.
  */
-class ElementManager {
+export class ElementManager {
     constructor(canvas) {
         this.canvas = canvas;
         this.elements = []; // List of active Element objects

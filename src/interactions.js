@@ -4,11 +4,11 @@
  * Defines InteractionManager class to handle all user inputs:
  * drag/drop, mouse clicks, keyboard, context menu, zoom, inline editing.
  */
-
+import { ELEMENT_TYPES } from './elements.js';
 /**
  * InteractionManager - Handles user interactions with the canvas and elements.
  */
-class InteractionManager {
+export class InteractionManager {
     constructor(canvas, elementManager, connectionManager) {
         this.canvas = canvas;
         this.elementManager = elementManager;
@@ -23,7 +23,9 @@ class InteractionManager {
         this.panStartY = 0;
         this.isPanningKeyPressed = false;
         this.zoom = 1;
-
+        this.clickTimeout = null;
+        this.lastClickTargetId = null; // Store the ID of the element from the first click
+        this.MAX_DBL_CLICK_TIME = 300; // Milliseconds for double click threshold
         // --- CHANGE: Get references to BOTH context menus ---
         this.elementContextMenu = document.getElementById('element-context-menu');
         this.connectionContextMenu = document.getElementById('connection-context-menu');
@@ -41,11 +43,6 @@ class InteractionManager {
         this.handleKeyUp = this.handleKeyUp.bind(this);
         this.handleDrop = this.handleDrop.bind(this);
 
-        // --- CHANGE: No longer need to bind context menu handlers here ---
-        // They will be added directly or use arrow functions in initEvents
-        this.clickTimeout = null;
-        this.lastClickTargetId = null; // Store the ID of the element from the first click
-        this.MAX_DBL_CLICK_TIME = 300; // Milliseconds for double click threshold
         // Initialize all event listeners
         this.initEvents();
     }
@@ -483,6 +480,7 @@ class InteractionManager {
         this.contextTargetConnection = null;
         console.log("%c<<< hideAllContextMenus", "background: #fff0f0; color: red;");
     }
+    
     /** Hide context menu UI. */
     hideContextMenu() {
         console.log(">>>hideContexMenu");

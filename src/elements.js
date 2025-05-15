@@ -5,7 +5,7 @@
  */
 
 // Define element types and their properties
-const ELEMENT_TYPES = {
+export const ELEMENT_TYPES = {
     EVENT: 'event',
     EXTERNAL_EVENT: 'external-event',
     COMMAND: 'command',
@@ -42,7 +42,7 @@ let idCounter = 1;
 /**
  * Element class - Base class for all visual elements on the canvas.
  */
-class Element {
+export class Element {
     constructor(type, x, y, name = '') {
         this.id = `element-${idCounter++}`;
         this.type = type;
@@ -50,8 +50,8 @@ class Element {
         this.y = y;
         this.name = name;
         this.connections = []; // Stores references to connected Connection objects
-        this.width = ELEMENT_SIZES.WIDTH;
-        this.height = ELEMENT_SIZES.HEIGHT;
+        this.width = (type === ELEMENT_TYPES.SLICE) ? ELEMENT_SIZES.SLICE_WIDTH : ELEMENT_SIZES.WIDTH;
+        this.height = (type === ELEMENT_TYPES.SLICE) ? ELEMENT_SIZES.SLICE_HEIGHT : ELEMENT_SIZES.HEIGHT;
 
         // Special case for slices
         if (type === ELEMENT_TYPES.SLICE) {
@@ -233,7 +233,7 @@ class Element {
 /**
  * Connection class - Represents a directed connection between two elements.
  */
-class Connection {
+export class Connection {
     constructor(sourceElement, targetElement) {
         this.id = `connection-${idCounter++}`;
         this.sourceElement = sourceElement;

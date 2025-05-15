@@ -1,0 +1,31 @@
+{
+  "name": "svgjs-em-editor",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5"
+  },
+  "description": "Event Modeling Editor",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kongotania/svgjs-em-editor.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/kongotania/svgjs-em-editor/issues"
+  },
+  "homepage": "https://github.com/kongotania/svgjs-em-editor#readme",
+  "dependencies": {
+    "@svgdotjs/svg.draggable.js": "^3.0.6",
+    "@svgdotjs/svg.js": "^3.2.4"
+  }
+}
