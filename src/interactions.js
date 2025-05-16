@@ -25,7 +25,8 @@ export class InteractionManager {
         this.zoom = 1;
         this.clickTimeout = null;
         this.lastClickTargetId = null; // Store the ID of the element from the first click
-        this.MAX_DBL_CLICK_TIME = 300; // Milliseconds for double click threshold
+        this.MAX_DBL_CLICK_TIME = 150; // Milliseconds for double click threshold
+        
         // --- CHANGE: Get references to BOTH context menus ---
         this.elementContextMenu = document.getElementById('element-context-menu');
         this.connectionContextMenu = document.getElementById('connection-context-menu');
@@ -816,9 +817,9 @@ export class InteractionManager {
                 let shouldAttemptToFinalize = true;
                 let showMenuForThisElementAfterSave = false; // Default: blur does not show menu for the item losing focus
                 // ** Start Add: Detailed logging for relatedTarget conditions **
-                console.log(`        handleInlineEditorBlur (setTimeout ${currentTimestamp}): Initial decision: shouldAttemptToFinalize=${shouldAttemptToFinalize}, showMenuForThisElementAfterSave=${showMenuForThisElementAfterSave}`);
+                console.log(`        handleInlineEditorBlur (setTimeout): Initial decision: shouldAttemptToFinalize=${shouldAttemptToFinalize}, showMenuForThisElementAfterSave=${showMenuForThisElementAfterSave}`);
                 const relatedTargetElement = relatedTarget ? relatedTarget.closest('.element') : null;
-                console.log(`        handleInlineEditorBlur (setTimeout ${currentTimestamp}): relatedTargetElement found: ${relatedTargetElement?.id}`);
+                console.log(`        handleInlineEditorBlur (setTimeout): relatedTargetElement found: ${relatedTargetElement?.id}`);
                 // ** End Add **
                 if (relatedTarget) {
                     if (relatedTarget.closest('.context-menu') ||
@@ -854,7 +855,7 @@ export class InteractionManager {
                     shouldAttemptToFinalize = false;
                 }
                 // ** Start Add: Log final decision values **
-                console.log(`        handleInlineEditorBlur (setTimeout ${currentTimestamp}): Before calling save: shouldAttemptToFinalize=${shouldAttemptToFinalize}, showMenuForThisElementAfterSave=${showMenuForThisElementAfterSave} for ${elementBeingEdited.id}`);
+                console.log(`        handleInlineEditorBlur (setTimeout): Before calling save: shouldAttemptToFinalize=${shouldAttemptToFinalize}, showMenuForThisElementAfterSave=${showMenuForThisElementAfterSave} for ${elementBeingEdited.id}`);
                 // ** End Add **
                 if (shouldAttemptToFinalize) {
                     console.log(`        handleInlineEditorBlur (setTimeout): FINAL DECISION - Calling handleSaveName(${showMenuForThisElementAfterSave}) for ${elementBeingEdited.id}`);

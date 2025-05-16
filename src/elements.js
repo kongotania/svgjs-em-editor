@@ -141,22 +141,31 @@ export class Element {
                 ry: 5
             })
             .addClass('element-rect');
+        // has the element an icon 
+
+
 
         // Add icons if applicable
         if (this.type === ELEMENT_TYPES.PROCESSOR) {
-            group.text('⚙️').font({ size: 20 }).center(this.width / 2, this.height / 2);
+            group.text('⚙️').font({
+                size: 20,
+                anchor: 'middle',
+                'dominant-baseline': 'middle'
+            }).center(this.width / 2, this.height * 0.20);
         } else if (this.type === ELEMENT_TYPES.GUI) {
-            group.text('🖥️').font({ size: 20 }).center(this.width / 2, this.height / 2);
+            group.text('🖥️').font({
+                size: 20,
+                anchor: 'middle',
+                'dominant-baseline': 'middle'
+            }).center(this.width / 2, this.height * 0.20);
         }
 
         // Create ForeignObject
         const foreignObject = group.foreignObject(this.width, this.height)
             .attr({ x: 0, y: 0 })
             .addClass('element-editor-fobj')
-            //** Start change **
-            .attr('visibility', 'visible')      // Make it visible by default
-            .attr('pointer-events', 'none');    // Clicks pass through to SVG rect by default
-        //** End change **
+            .attr('visibility', 'visible')
+            .attr('pointer-events', 'none');
 
         // Create HTML contenteditable div inside ForeignObject
         const contentDiv = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
