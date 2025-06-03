@@ -1,10 +1,15 @@
 /**
  * elements.js
  *
- * Defines the Element and Connection classes, constants for types, colors, sizes.
+ * Defines the Element class and constants for types, colors, sizes.
  */
+import { v4 as uuidv4 } from 'uuid';
 
 // Define element types and their properties
+/**
+ * @readonly
+ * @enum {string}
+ */
 export const ELEMENT_TYPES = {
     EVENT: 'event',
     EXTERNAL_EVENT: 'external-event',
@@ -16,7 +21,7 @@ export const ELEMENT_TYPES = {
     SLICE: 'slice'
 };
 
-// Element colors
+// Element colors mapped by type
 const ELEMENT_COLORS = {
     [ELEMENT_TYPES.EVENT]: '#FF9800', // Orange
     [ELEMENT_TYPES.EXTERNAL_EVENT]: '#FFEB3B', // Yellow
@@ -36,24 +41,70 @@ const ELEMENT_SIZES = {
     SLICE_HEIGHT: 400
 };
 
-// Counter for generating unique IDs
+// Counter for generating unique IDs (legacy, not used with uuidv4)
 let idCounter = 1;
 
 /**
  * Element class - Base class for all visual elements on the canvas.
  */
 export class Element {
+    /**
+     * Create a new Element.
+     * @param {string} type - The type of the element (from ELEMENT_TYPES).
+     * @param {number} x - The x position of the element.
+     * @param {number} y - The y position of the element.
+     * @param {string} [name=''] - The display name of the element.
+     */
     constructor(type, x, y, name = '') {
-        this.id = `element-${idCounter++}`;
+        /**
+         * Unique identifier for this element.
+         * @type {string}
+         */
+        this.id = `element-${uuidv4()}`;
+
+        /**
+         * The type of this element.
+         * @type {string}
+         */
         this.type = type;
+
+        /**
+         * X position of the element.
+         * @type {number}
+         */
         this.x = x;
+
+        /**
+         * Y position of the element.
+         * @type {number}
+         */
         this.y = y;
+
+        /**
+         * Display name of the element.
+         * @type {string}
+         */
         this.name = name;
-        this.connections = []; // Stores references to connected Connection objects
+
+        /**
+         * Array of Connection objects attached to this element.
+         * @type {Array}
+         */
+        this.connections = [];
+
+        /**
+         * Width of the element.
+         * @type {number}
+         */
         this.width = (type === ELEMENT_TYPES.SLICE) ? ELEMENT_SIZES.SLICE_WIDTH : ELEMENT_SIZES.WIDTH;
+
+        /**
+         * Height of the element.
+         * @type {number}
+         */
         this.height = (type === ELEMENT_TYPES.SLICE) ? ELEMENT_SIZES.SLICE_HEIGHT : ELEMENT_SIZES.HEIGHT;
 
-        // Special case for slices
+        // Special case for slices (redundant, but ensures explicitness)
         if (type === ELEMENT_TYPES.SLICE) {
             this.width = ELEMENT_SIZES.SLICE_WIDTH;
             this.height = ELEMENT_SIZES.SLICE_HEIGHT;
@@ -62,8 +113,9 @@ export class Element {
 
     /**
      * Check if this element overlaps with another element (simple AABB check).
+     * Slices are allowed to overlap with other elements.
      * @param {Element} otherElement - The element to check against.
-     * @returns {boolean} - True if elements overlap.
+     * @returns {boolean} - True if elements overlap, false otherwise.
      */
     overlaps(otherElement) {
         // Slices can overlap with other elements
@@ -82,7 +134,8 @@ export class Element {
 
     /**
      * Get the center connection points for this element.
-     * @returns {Object} - Object with keys 'top', 'right', 'bottom', 'left' and {x, y} values.
+     * Returns an object with keys 'top', 'right', 'bottom', 'left' and {x, y} values.
+     * @returns {Object<string, {x: number, y: number}>}
      */
     getConnectionPoints() {
         return {
@@ -97,7 +150,7 @@ export class Element {
      * Find the pair of connection points (one on this element, one on the target)
      * that have the minimum distance between them.
      * @param {Element} targetElement - The element to connect to.
-     * @returns {Object} - { source: {x, y, side}, target: {x, y, side} }
+     * @returns {{ source: {x: number, y: number, side: string}, target: {x: number, y: number, side: string} }}
      */
     findBestConnectionPoint(targetElement) {
         const sourcePoints = this.getConnectionPoints();
@@ -106,6 +159,7 @@ export class Element {
         let bestSourcePoint = null;
         let bestTargetPoint = null;
 
+        // Compare all pairs of sides to find the closest points
         for (const [sourceSide, sourcePoint] of Object.entries(sourcePoints)) {
             for (const [targetSide, targetPoint] of Object.entries(targetPoints)) {
                 // Simple Euclidean distance
@@ -123,17 +177,18 @@ export class Element {
         return { source: bestSourcePoint, target: bestTargetPoint };
     }
 
-    // elements.js
-    // class Element
-
     /**
      * Create an SVG representation of this element.
+     * Adds icons for PROCESSOR and GUI types, and sets up drag and interaction logic.
      * @param {SVG.Container} canvas - The SVG canvas to draw on.
      * @param {InteractionManager} interactionManager - Reference to handle interactions.
-     * @returns {SVG.Group} - The SVG group containing the element.
+     * @returns {SVG.G} - The SVG group containing the element.
      */
     createSVG(canvas, interactionManager) {
+        // Create a group for the element
         const group = canvas.group().attr('id', this.id).addClass('element');
+
+        // Draw the main rectangle
         const rect = group.rect(this.width, this.height)
             .attr({
                 fill: ELEMENT_COLORS[this.type],
@@ -141,18 +196,17 @@ export class Element {
                 ry: 5
             })
             .addClass('element-rect');
-        // has the element an icon 
-
-
 
         // Add icons if applicable
         if (this.type === ELEMENT_TYPES.PROCESSOR) {
+            // Add gear icon for processor
             group.text('⚙️').font({
                 size: 20,
                 anchor: 'middle',
                 'dominant-baseline': 'middle'
             }).center(this.width / 2, this.height * 0.20);
         } else if (this.type === ELEMENT_TYPES.GUI) {
+            // Add monitor icon for GUI
             group.text('🖥️').font({
                 size: 20,
                 anchor: 'middle',
@@ -160,7 +214,7 @@ export class Element {
             }).center(this.width / 2, this.height * 0.20);
         }
 
-        // Create ForeignObject
+        // Create ForeignObject for HTML content (for editable name, etc.)
         const foreignObject = group.foreignObject(this.width, this.height)
             .attr({ x: 0, y: 0 })
             .addClass('element-editor-fobj')
@@ -175,10 +229,10 @@ export class Element {
 
         foreignObject.node.appendChild(contentDiv);
 
-        // Position the group
+        // Position the group at the element's coordinates
         group.move(this.x, this.y);
 
-        // Slice styling
+        // Special styling for slices (dashed border, etc.)
         if (this.type === ELEMENT_TYPES.SLICE) {
             rect.attr({
                 fill: ELEMENT_COLORS[this.type],
@@ -187,45 +241,45 @@ export class Element {
             });
         }
 
-        // Add Draggable behavior
+        // Add Draggable behavior and drag event handlers
         group.draggable().on('dragstart.namespace', (e) => {
-            console.log("Element dragstart");
             e.preventDefault();
             if (interactionManager) {
-                interactionManager.currentDraggingElement = this; // 'this' is the element being dragged (e.g., E1)
+                interactionManager.currentDraggingElement = this;
 
-                // ** Start Change: Handle existing edit on a DIFFERENT element **
+                // If editing a different element, save its name before dragging this one
                 if (interactionManager.currentEditingDiv &&
-                    interactionManager.selectedElement && // selectedElement should be the one being edited
-                    interactionManager.selectedElement.id !== this.id) { // If editing a DIFFERENT element
-
+                    interactionManager.selectedElement &&
+                    interactionManager.selectedElement.id !== this.id) {
                     console.log(`Element.dragstart on ${this.id}: Detected active edit on different element ${interactionManager.selectedElement.id}. Saving it (no menu).`);
-                    interactionManager.handleSaveName(false); // Save the other element's edit, no menu for it
+                    interactionManager.handleSaveName(false);
                 } else if (interactionManager.currentEditingDiv &&
                     interactionManager.selectedElement &&
                     interactionManager.selectedElement.id === this.id) {
-                    // Trying to drag the element that is currently being edited
+                    // If dragging the element currently being edited, save its name
                     console.log(`Element.dragstart on ${this.id}: This element is currently being edited. Saving it (no menu) before drag.`);
-                    interactionManager.handleSaveName(false); // Save this element's edit, no menu
+                    interactionManager.handleSaveName(false);
                 }
-                // ** End Change **
 
-                // Always hide context menus when a drag starts regardless of previous edit state
+                // Always hide context menus when a drag starts
                 interactionManager.hideAllContextMenus();
             }
             group.addClass('dragging');
         }).on('dragmove.namespace', (e) => {
             e.preventDefault();
             const { handler, box } = e.detail;
+            // Update element's position
             this.x = box.x;
             this.y = box.y;
             handler.move(box.x, box.y);
+
+            // Update connections visually as the element moves
             if (interactionManager?.connectionManager) {
                 interactionManager.connectionManager.updateConnectionsForElement(this);
             }
         }).on('dragend.namespace', (e) => {
             e.preventDefault();
-            const { handler, box } = e.detail; // box is fine here
+            const { handler, box } = e.detail;
             group.removeClass('dragging');
             this.x = box.x;
             this.y = box.y;
@@ -237,122 +291,4 @@ export class Element {
         return group;
     }
     // End class Element
-}
-
-/**
- * Connection class - Represents a directed connection between two elements.
- */
-export class Connection {
-    constructor(sourceElement, targetElement) {
-        this.id = `connection-${idCounter++}`;
-        this.sourceElement = sourceElement;
-        this.targetElement = targetElement;
-
-        // Calculate initial best connection points (updated when drawn/moved)
-        const { source, target } = sourceElement.findBestConnectionPoint(targetElement);
-        this.sourcePoint = source;
-        this.targetPoint = target;
-    }
-
-    /**
-     * Check if adding this connection would create a loop in the graph (DFS).
-     * @returns {boolean} - True if connection creates a loop.
-     */
-    createsLoop() {
-        // Check direct self-loop (should be prevented earlier)
-        if (this.sourceElement.id === this.targetElement.id) { return true; }
-        // Check if a path already exists from target back to source
-        return this.pathExists(this.targetElement, this.sourceElement, new Set());
-    }
-
-    /**
-     * Helper for createsLoop: Performs Depth First Search to find path.
-     * @param {Element} current - The current element in the search path.
-     * @param {Element} target - The target element we are trying to reach.
-     * @param {Set<string>} visited - Set of visited element IDs in the current path.
-     * @returns {boolean} - True if path exists from current to target.
-     */
-    pathExists(current, target, visited) {
-        if (current.id === target.id) { return true; }
-        visited.add(current.id);
-
-        // Look at outgoing connections from the 'current' element
-        for (const conn of current.connections) {
-            // Only follow connections originating from 'current'
-            if (conn.sourceElement.id === current.id) {
-                const nextElement = conn.targetElement;
-                if (!visited.has(nextElement.id)) {
-                    if (this.pathExists(nextElement, target, visited)) {
-                        return true;
-                    }
-                }
-            }
-        }
-        // Backtrack (implicitly handled by returning false if no path found)
-        // visited.delete(current.id); // Not strictly needed for basic check
-        return false;
-    }
-
-
-    /**
-     * Create an SVG representation of this connection (a curved path with marker).
-     * @param {SVG.Container} canvas - The SVG canvas to draw on.
-     * @returns {SVG.Path} - The SVG path representing the connection.
-     */
-    createSVG(canvas) {
-        // Update connection points based on current element positions
-        const { source, target } = this.sourceElement.findBestConnectionPoint(this.targetElement);
-        this.sourcePoint = source;
-        this.targetPoint = target;
-
-        // Create the SVG path data string
-        const pathData = this.createCurvedPath(this.sourcePoint, this.targetPoint);
-
-        // Create the SVG path element
-        const connectionPath = canvas.path(pathData)
-            .attr({
-                id: this.id,
-                fill: 'none',
-                stroke: '#333',
-                'stroke-width': 2
-            })
-            .addClass('connection-path');
-
-        // Apply the globally defined marker using its ID via .attr()
-        connectionPath.attr('marker-end', 'url(#arrowhead-marker)');
-
-        return connectionPath;
-    }
-
-    /**
-     * Calculate the SVG path data string for a cubic Bezier curve between two points.
-     * Control points are offset based on the connection side for better routing.
-     * @param {Object} source - Source point {x, y, side}.
-     * @param {Object} target - Target point {x, y, side}.
-     * @returns {string} - SVG path data string (e.g., "M x y C cx1 cy1, cx2 cy2, x2 y2").
-     */
-    createCurvedPath(source, target) {
-        let sourceControlX = source.x;
-        let sourceControlY = source.y;
-        let targetControlX = target.x;
-        let targetControlY = target.y;
-        const controlDistance = 50; // How far control points extend
-
-        // Offset control points based on connection side
-        switch (source.side) {
-            case 'top': sourceControlY -= controlDistance; break;
-            case 'right': sourceControlX += controlDistance; break;
-            case 'bottom': sourceControlY += controlDistance; break;
-            case 'left': sourceControlX -= controlDistance; break;
-        }
-        switch (target.side) {
-            case 'top': targetControlY -= controlDistance; break;
-            case 'right': targetControlX += controlDistance; break;
-            case 'bottom': targetControlY += controlDistance; break;
-            case 'left': targetControlX -= controlDistance; break;
-        }
-
-        // Format: M = moveto, C = curveto (cubic bezier)
-        return `M ${source.x} ${source.y} C ${sourceControlX} ${sourceControlY}, ${targetControlX} ${targetControlY}, ${target.x} ${target.y}`;
-    }
 }

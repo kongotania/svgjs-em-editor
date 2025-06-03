@@ -1,25 +1,55 @@
 /**
- * connections.js
+ * ConnectionManager.js
  *
  * Defines the ConnectionManager class for handling connection creation and management.
  */
-import { Connection } from './elements.js';
+import { Connection } from './Connection.js';
 
 /**
  * ConnectionManager - Handles the creation and management of connections between elements.
  */
 export class ConnectionManager {
     /**
+     * Construct a ConnectionManager.
      * @param {SVG.Container} canvas - The main SVG canvas.
      * @param {ElementManager} elementManager - Reference to manage elements.
      */
     constructor(canvas, elementManager) {
+        /**
+         * The SVG canvas where connections are drawn.
+         * @type {SVG.Container}
+         */
         this.canvas = canvas;
-        this.elementManager = elementManager; // Store manager reference
-        this.connections = []; // List of active Connection objects
-        this.connectionMode = false; // Are we currently drawing a connection?
-        this.sourceElement = null; // Element where the current connection starts
-        this.tempConnection = null; // The temporary dashed line SVG path
+
+        /**
+         * Reference to the element manager.
+         * @type {ElementManager}
+         */
+        this.elementManager = elementManager;
+
+        /**
+         * List of active Connection objects.
+         * @type {Array<Connection>}
+         */
+        this.connections = [];
+
+        /**
+         * Whether a connection is currently being drawn.
+         * @type {boolean}
+         */
+        this.connectionMode = false;
+
+        /**
+         * The element where the current connection starts.
+         * @type {Element|null}
+         */
+        this.sourceElement = null;
+
+        /**
+         * The temporary dashed line SVG path shown during connection creation.
+         * @type {SVG.Path|null}
+         */
+        this.tempConnection = null;
     }
 
     /**
@@ -27,27 +57,27 @@ export class ConnectionManager {
      * @param {Element} element - The source element.
      */
     startConnection(element) {
-        console.log(">>> startConnection", { elementId: element.id, currentMode: this.connectionMode });
-
-        if (!element) return;
+        if (!element) {
+            throw new Error("startConnection: 'element' must not be null or undefined.");
+        }
         if (this.connectionMode) {
-            // console.warn("Already in connection mode, cancelling previous.");
-            this.cancelConnection(); // Ensure cleanup if called unexpectedly
+            // If already in connection mode, cancel the previous attempt
+            console.error("Already in connection mode, cancelling previous.");
+            this.cancelConnection();
         }
         this.connectionMode = true;
         this.sourceElement = element;
 
-        // Create a temporary dashed line path
+        // Create a temporary dashed line path for visual feedback
         this.tempConnection = this.canvas.path().attr({
-            stroke: '#555', // Slightly different color for temp line?
+            stroke: '#555', // Slightly different color for temp line
             'stroke-width': 2,
             'stroke-dasharray': '5,5',
             fill: 'none'
         });
 
-        // Apply the global marker using .attr()
+        // Apply the global marker to the temporary connection
         this.tempConnection.attr('marker-end', 'url(#arrowhead-marker)');
-        console.log("<<< startConnection finished", { newMode: this.connectionMode, source: this.sourceElement.id });
     }
 
     /**
@@ -106,14 +136,14 @@ export class ConnectionManager {
      * @returns {Connection | null} - The created Connection object, or null if invalid/cancelled.
      */
     completeConnection(targetElement) {
-        console.log(">>> completeConnection", { targetId: targetElement?.id, currentMode: this.connectionMode, source: this.sourceElement?.id });
         if (!this.connectionMode || !this.sourceElement) {
-             console.warn("completeConnection called but not in connection mode or no source.");
+            // Not in connection mode or no source element
+            console.warn("completeConnection called but not in connection mode or no source.");
             // Ensure temp line is removed even if called incorrectly
-            if (this.tempConnection) { 
-                this.tempConnection.remove(); 
-                    this.tempConnection = null;
-                 }
+            if (this.tempConnection) {
+                this.tempConnection.remove();
+                this.tempConnection = null;
+            }
             return null;
         }
 
@@ -126,41 +156,33 @@ export class ConnectionManager {
             this.tempConnection.remove();
             this.tempConnection = null;
         }
-        // console.log("--- completeConnection: Mode reset");
         // --- End Reset State ---
 
         // Validate target
         if (!targetElement || targetElement === currentSource) {
-            // console.log("--- completeConnection: Invalid target or self-connection. Cancelled.");
-            return null; // Cancelled (self or no target)
+            // Prevent self-connections or missing targets
+            console.error("--- completeConnection: Invalid target or self-connection. Cancelled.");
+            return null;
         }
 
         // Create the connection object
         const connection = new Connection(currentSource, targetElement);
 
-        // --- Loop Prevention (Currently Disabled) ---
-        /*
-        if (connection.createsLoop()) {
-            console.log('--- completeConnection: Connection creates a loop and is not allowed');
-            return null; // Cancelled (loop detected)
-        }
-        */
-        // --- End Loop Prevention ---
-
         // Update element and manager state
         if (currentSource.connections && targetElement.connections) {
+            // Add the connection to both elements and the manager
             currentSource.connections.push(connection);
             targetElement.connections.push(connection);
-            this.connections.push(connection); // Add to manager's list
+            this.connections.push(connection);
         } else {
+            // If either element is missing a connections array, abort
             console.error("Element missing 'connections' array property!");
-            return null; // Cannot add connection reliably
+            return null;
         }
 
         // Draw the final connection SVG
-        connection.createSVG(this.canvas); // createSVG applies the marker
+        connection.createSVG(this.canvas);
 
-        console.log("<<< completeConnection finished successfully", { connectionId: connection.id });
         return connection;
     }
 
@@ -168,7 +190,6 @@ export class ConnectionManager {
      * Cancel the current connection operation explicitly.
      */
     cancelConnection() {
-        console.log(">>> cancelConnection", { currentMode: this.connectionMode });
         if (!this.connectionMode) return;
 
         // Remove temporary line if it exists
@@ -180,7 +201,6 @@ export class ConnectionManager {
         // Reset state
         this.connectionMode = false;
         this.sourceElement = null;
-        console.log("<<< cancelConnection finished");
     }
 
     /**
@@ -188,14 +208,10 @@ export class ConnectionManager {
      * @param {Connection} connection - The connection object to remove.
      */
     removeConnection(connection) {
-        console.log(`>>> ConnectionManager.removeConnection called for ID: ${connection?.id}`);
-
         if (!connection || !connection.sourceElement || !connection.targetElement) {
             console.error("   removeConnection: Invalid connection object received.", connection);
-            return; // Exit if connection object is invalid
+            return;
         }
-        console.log(`   Source: ${connection.sourceElement.id}, Target: ${connection.targetElement.id}`);
-
 
         // 1. Remove from source element's list
         const sourceIndex = connection.sourceElement?.connections.findIndex(c => c.id === connection.id);
@@ -221,7 +237,6 @@ export class ConnectionManager {
             svgConnection.remove();
         }
         // No need to remove the marker as it's global
-        console.log(`<<< ConnectionManager.removeConnection finished for ID: ${connection?.id}`); // LOG ADDE
     }
 
     /**
@@ -230,8 +245,11 @@ export class ConnectionManager {
      * @param {Element} element - The element whose connections need updating.
      */
     updateConnectionsForElement(element) {
-        if (!element) return;
-        console.log(`>>> updateConnectionsForElement for: ${element.id}`);
+        if (!element) {
+            console.error("Invalid Element");
+            return;
+        }
+        // Filter connections that are attached to the given element
         const connectionsToUpdate = this.connections.filter(conn =>
             conn.sourceElement.id === element.id || conn.targetElement.id === element.id
         );
@@ -241,7 +259,7 @@ export class ConnectionManager {
             if (svgConnection) {
                 // Recalculate best points and path data
                 const { source, target } = connection.sourceElement.findBestConnectionPoint(connection.targetElement);
-                connection.sourcePoint = source; // Update connection state
+                connection.sourcePoint = source;
                 connection.targetPoint = target;
                 const newPathData = connection.createCurvedPath(source, target);
                 // Update the existing SVG path's shape
@@ -252,7 +270,6 @@ export class ConnectionManager {
                 connection.createSVG(this.canvas);
             }
         });
-        console.log(`<<< updateConnectionsForElement finished for: ${element.id}`);
     }
 
     /**
@@ -260,7 +277,6 @@ export class ConnectionManager {
      * Should only be used if a global redraw is needed (e.g., after zoom if routing changes).
      */
     updateConnections() {
-        console.log(">>> updateConnections (Global) called");
         this.connections.forEach(connection => {
             const svgConnection = this.canvas.findOne(`#${connection.id}`);
             if (svgConnection) {
@@ -274,7 +290,6 @@ export class ConnectionManager {
                 connection.createSVG(this.canvas);
             }
         });
-        console.log("<<< updateConnections (Global) finished");
     }
 
     /**
