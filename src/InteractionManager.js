@@ -31,7 +31,7 @@ export class InteractionManager {
         this.panStartX = 0;
         this.panStartY = 0;
         this.isPanningKeyPressed = false;
-        this.zoom = 1;
+        // this.zoom = 1;
         this.clickTimeout = null;
         this.lastClickTargetId = null; // Store the ID of the element from the first click
         this.MAX_DBL_CLICK_TIME = 150; // Milliseconds for double click threshold
@@ -72,6 +72,16 @@ export class InteractionManager {
             this.canvas.node.addEventListener('click', this.handleCanvasClick);
             this.canvas.node.addEventListener('contextmenu', e => e.preventDefault());
             this.canvas.node.addEventListener('dblclick', this.handleDoubleClick);
+            // Add wheel event for plugin-based zooming
+            this.canvas.node.addEventListener('wheel', (e) => {
+                // Only process wheel events if not editing or drawing connections
+                if (!this.currentEditingDiv && !this.connectionManager.connectionMode) {
+                    e.preventDefault(); // Prevent browser scroll
+                    const delta = e.deltaY > 0 ? 0.8 : 1.2; // Zoom out or in
+                    const point = this.getCanvasPoint(e.clientX, e.clientY);
+                    this.canvas.zoom(this.canvas.zoom() * delta, point);
+                }
+            });
         } else {
             console.error("Canvas node is not initialized.");
         }
@@ -132,22 +142,24 @@ export class InteractionManager {
             }
         };
 
-        // Zoom in/out and reset view controls
+        // Zoom controls using plugin
         document.getElementById('zoom-in')?.addEventListener('click', () => {
             globalUiActionHandler();
-            this.setZoom(this.zoom * 1.2);
+            const currentZoom = this.canvas.zoom();
+            this.canvas.zoom(currentZoom * 1.2);
         });
 
         document.getElementById('zoom-out')?.addEventListener('click', () => {
             globalUiActionHandler();
-            this.setZoom(this.zoom * 0.8);
+            const currentZoom = this.canvas.zoom();
+            this.canvas.zoom(currentZoom * 0.8);
         });
 
         document.getElementById('reset-view')?.addEventListener('click', () => {
             globalUiActionHandler();
-            this.setZoom(1);
             const drawingArea = document.getElementById('drawing-area');
             if (drawingArea) {
+                this.canvas.zoom(1); // Reset zoom to 1
                 this.canvas.viewbox(0, 0, drawingArea.clientWidth, drawingArea.clientHeight);
             }
         });
@@ -186,7 +198,7 @@ export class InteractionManager {
                 // If editing, let blur handler handle save/cancel
             }
             // Panning logic (middle mouse or spacebar+left click)
-            if (e.button === 1 || e.buttons === 4 || (e.button === 0 && this.isPanningKeyPressed)) {
+            if (e.button === 0 && this.isPanningKeyPressed) {
                 this.isPanning = true;
                 this.panStartX = e.clientX;
                 this.panStartY = e.clientY;
@@ -202,18 +214,17 @@ export class InteractionManager {
      */
     handleCanvasMouseMove(e) {
         if (this.isPanning) {
-            // Calculate pan delta and update viewbox
+            // Spacebar panning with manual viewbox update
             const dx = e.clientX - this.panStartX;
             const dy = e.clientY - this.panStartY;
             const viewbox = this.canvas.viewbox();
-            const currentZoom = this.zoom || 1;
+            const currentZoom = this.canvas.zoom();
             const newX = viewbox.x - dx / currentZoom;
             const newY = viewbox.y - dy / currentZoom;
             this.canvas.viewbox(newX, newY, viewbox.width, viewbox.height);
             this.panStartX = e.clientX;
             this.panStartY = e.clientY;
         } else if (this.connectionManager.connectionMode) {
-            // If drawing a connection, update the temp line to follow the mouse
             const point = this.getCanvasPoint(e.clientX, e.clientY);
             this.connectionManager.updateTempConnection(point.x, point.y);
         }
@@ -811,29 +822,29 @@ export class InteractionManager {
      * Set canvas zoom level and update viewbox.
      * @param {number} zoom - The zoom factor (clamped between 0.2 and 3).
      */
-    setZoom(zoom) {
-        zoom = Math.max(0.2, Math.min(3, zoom)); // Clamp zoom level
-        if (this.zoom === zoom) return;
+    // setZoom(zoom) {
+    //     zoom = Math.max(0.2, Math.min(3, zoom)); // Clamp zoom level
+    //     if (this.zoom === zoom) return;
 
-        this.zoom = zoom;
-        const viewbox = this.canvas.viewbox();
-        const clientWidth = this.canvas.node.clientWidth;
-        const clientHeight = this.canvas.node.clientHeight;
+    //     this.zoom = zoom;
+    //     const viewbox = this.canvas.viewbox();
+    //     const clientWidth = this.canvas.node.clientWidth;
+    //     const clientHeight = this.canvas.node.clientHeight;
 
-        if (!clientWidth || !clientHeight) {
-            console.warn("Canvas client dimensions are zero, cannot calculate zoom viewbox.");
-            return;
-        }
+    //     if (!clientWidth || !clientHeight) {
+    //         console.warn("Canvas client dimensions are zero, cannot calculate zoom viewbox.");
+    //         return;
+    //     }
 
-        const newWidth = clientWidth / zoom;
-        const newHeight = clientHeight / zoom;
-        const centerX = viewbox.x + viewbox.width / 2;
-        const centerY = viewbox.y + viewbox.height / 2;
-        const newX = centerX - newWidth / 2;
-        const newY = centerY - newHeight / 2;
+    //     const newWidth = clientWidth / zoom;
+    //     const newHeight = clientHeight / zoom;
+    //     const centerX = viewbox.x + viewbox.width / 2;
+    //     const centerY = viewbox.y + viewbox.height / 2;
+    //     const newX = centerX - newWidth / 2;
+    //     const newY = centerY - newHeight / 2;
 
-        this.canvas.viewbox(newX, newY, newWidth, newHeight);
-    }
+    //     this.canvas.viewbox(newX, newY, newWidth, newHeight);
+    // }
 
     /**
      * Convert screen coordinates (clientX/Y) to SVG canvas coordinates.
@@ -842,21 +853,9 @@ export class InteractionManager {
      * @returns {{x: number, y: number}}
      */
     getCanvasPoint(clientX, clientY) {
-        if (!this.canvas?.node?.createSVGPoint || !this.canvas?.node?.getScreenCTM) {
-            console.error("SVG canvas node or required methods not available for coordinate conversion.");
-            return { x: 0, y: 0 };
-        }
-        const screenPoint = this.canvas.node.createSVGPoint();
-        screenPoint.x = clientX;
-        screenPoint.y = clientY;
         try {
-            const CTM = this.canvas.node.getScreenCTM();
-            if (!CTM) {
-                console.error("Canvas screen CTM is null.");
-                return { x: 0, y: 0 };
-            }
-            const svgPoint = screenPoint.matrixTransform(CTM.inverse());
-            return { x: svgPoint.x, y: svgPoint.y };
+            const point = this.canvas.point(clientX, clientY);
+            return { x: point.x, y: point.y };
         } catch (error) {
             console.error("Error transforming screen point to SVG point:", error);
             return { x: 0, y: 0 };

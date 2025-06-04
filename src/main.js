@@ -5,6 +5,7 @@
  */
 import { SVG, extend as SVGextend } from '@svgdotjs/svg.js';
 import '@svgdotjs/svg.draggable.js';
+import '@svgdotjs/svg.panzoom.js';
 import './style.css';
 import { ConnectionManager } from './ConnectionManager.js';
 import { InteractionManager } from './InteractionManager.js';
@@ -14,7 +15,13 @@ import { ElementManager } from './ElementManager.js';
  * Initialize the application: setup SVG canvas, define global marker, create managers.
  */
 function initApp() {
-    const canvas = SVG().addTo('#drawing-area').size('100%', '100%');
+    const canvas = SVG().addTo('#drawing-area')
+        .size('100%', '100%')
+        .panZoom({
+            zoomMin: 0.2,
+            zoomMax: 3,
+            zoomFactor:0.2 
+        });
 
     // Set initial viewbox
     const drawingArea = document.getElementById('drawing-area');
