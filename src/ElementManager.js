@@ -140,21 +140,19 @@ export class ElementManager {
      * @param {Element} element - Element to update.
      */
     updateElement(element) {
-        if (!element) {
-            console.error("Invalid Element");
-            return;
-        }
-        // Remove old SVG
-        const svgElement = this.canvas.findOne(`#${element.id}`);
-        if (svgElement) {
-            svgElement.remove();
-        }
-        // Create new SVG (passing interactionManager is crucial for re-attaching draggable)
-        if (this.interactionManager) {
-            element.createSVG(this.canvas, this.interactionManager);
+        const svgGroup = this.canvas.findOne(`#${element.id}`);
+        if (svgGroup) {
+            const contentDiv = svgGroup.findOne('.element-content-div');
+            if (contentDiv && contentDiv.node) {
+                contentDiv.node.textContent = element.name || element.type;
+            } else {
+                console.warn(`Content div not found for element ${element.id}`);
+                // Fallback to full recreate if necessary
+                svgGroup.remove();
+                element.createSVG(this.canvas, this.interactionManager);
+            }
         } else {
-            console.error("InteractionManager not set when updating element SVG!");
-            element.createSVG(this.canvas, null);
+            element.createSVG(this.canvas, this.interactionManager);
         }
     }
 
