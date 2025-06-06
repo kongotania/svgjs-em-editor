@@ -819,34 +819,6 @@ export class InteractionManager {
     }
 
     /**
-     * Set canvas zoom level and update viewbox.
-     * @param {number} zoom - The zoom factor (clamped between 0.2 and 3).
-     */
-    // setZoom(zoom) {
-    //     zoom = Math.max(0.2, Math.min(3, zoom)); // Clamp zoom level
-    //     if (this.zoom === zoom) return;
-
-    //     this.zoom = zoom;
-    //     const viewbox = this.canvas.viewbox();
-    //     const clientWidth = this.canvas.node.clientWidth;
-    //     const clientHeight = this.canvas.node.clientHeight;
-
-    //     if (!clientWidth || !clientHeight) {
-    //         console.warn("Canvas client dimensions are zero, cannot calculate zoom viewbox.");
-    //         return;
-    //     }
-
-    //     const newWidth = clientWidth / zoom;
-    //     const newHeight = clientHeight / zoom;
-    //     const centerX = viewbox.x + viewbox.width / 2;
-    //     const centerY = viewbox.y + viewbox.height / 2;
-    //     const newX = centerX - newWidth / 2;
-    //     const newY = centerY - newHeight / 2;
-
-    //     this.canvas.viewbox(newX, newY, newWidth, newHeight);
-    // }
-
-    /**
      * Convert screen coordinates (clientX/Y) to SVG canvas coordinates.
      * @param {number} clientX
      * @param {number} clientY

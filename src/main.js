@@ -35,7 +35,6 @@ function initApp() {
 
     // --- Define Global Arrowhead Marker ---
     canvas.defs().marker(10, 10, function (add) { // ViewBox 10x10
-        // Draw polygon for arrowhead (tip at x=6 for a size of 6)
         add.polygon('0,2 6,5 0,8').fill('#333'); // Smaller arrow
     }).attr({
         id: 'arrowhead-marker',       // Fixed ID for referencing
@@ -46,7 +45,7 @@ function initApp() {
         refY: 5,                      // Reference point (center y in 10x10 viewBox)
         markerUnits: 'strokeWidth'    // Scales with line thickness
     });
-    // --- End Marker Definition ---
+
 
     // --- Instantiate Managers ---
     // Order: EM -> CM -> IM, then link IM back to EM if needed.
