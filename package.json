@@ -28,6 +28,8 @@
     "@svgdotjs/svg.draggable.js": "^3.0.6",
     "@svgdotjs/svg.js": "^3.2.4",
     "@svgdotjs/svg.panzoom.js": "github:svgdotjs/svg.panzoom.js",
+    "loglevel": "^1.9.2",
+    "loglevel-plugin-prefix": "^0.8.4",
     "uuid": "^11.1.0"
   }
 }

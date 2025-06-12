@@ -1,5 +1,7 @@
 import { Element, ELEMENT_TYPES } from './Element.js'; // Element class and ELEMENT_TYPES constant
+import { createLogger } from './logger.js';
 
+const logger = createLogger("ElementManager");
 /**
  * ElementManager - Manages element creation, deletion, collision, and updates.
  */
@@ -9,6 +11,7 @@ export class ElementManager {
      * @param {SVG.Container} canvas - The SVG canvas where elements are drawn.
      */
     constructor(canvas) {
+        logger.info(">Constructor");
         /**
          * The SVG canvas for rendering elements.
          * @type {SVG.Container}
@@ -45,6 +48,7 @@ export class ElementManager {
      * @returns {Element | null} - Created element or null if failed.
      */
     createElement(type, x, y, name = '') {
+        logger.info(">createElement");
         const element = new Element(type, x, y, name);
 
         // Basic collision avoidance: Check and offset slightly if needed.
@@ -57,7 +61,7 @@ export class ElementManager {
             attempts++;
         }
         if (this.hasCollision(element)) {
-            console.warn(`Could not place element ${element.id} without collision after ${attempts} attempts.`);
+            log.warn(`Could not place element ${element.id} without collision after ${attempts} attempts.`);
             // Optionally: element = null; // Example: fail to create if still colliding
         }
 
@@ -100,8 +104,9 @@ export class ElementManager {
      * @param {Element} element - Element to remove.
      */
     removeElement(element) {
+        logger.info("removeElement")
         if (!element) {
-            console.warn("   Incorrect value for element");
+            log.warn("   Incorrect value for element");
             return;
         }
 
@@ -140,6 +145,7 @@ export class ElementManager {
      * @param {Element} element - Element to update.
      */
     updateElement(element) {
+        logger.info(">updateElement");
         const svgGroup = this.canvas.findOne(`#${element.id}`);
         if (svgGroup) {
             const contentDiv = svgGroup.findOne('.element-content-div');

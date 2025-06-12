@@ -10,6 +10,10 @@ import './style.css';
 import { ConnectionManager } from './ConnectionManager.js';
 import { InteractionManager } from './InteractionManager.js';
 import { ElementManager } from './ElementManager.js';
+import { createLogger, setGlobalLogLevel } from './logger.js';
+
+const logger = createLogger("main")
+logger.setLevel(logger.levels.DEBUG);
 
 /**
  * Initialize the application: setup SVG canvas, define global marker, create managers.
@@ -29,7 +33,7 @@ function initApp() {
         canvas.viewbox(0, 0, drawingArea.clientWidth || 600, drawingArea.clientHeight || 400); // Added fallback size
     } else {
         // Stop initialization if container missing
-        console.error("#drawing-area element not found!");
+        logger.error("#drawing-area element not found!");
         return; 
     }
 
@@ -49,6 +53,7 @@ function initApp() {
 
     // --- Instantiate Managers ---
     // Order: EM -> CM -> IM, then link IM back to EM if needed.
+    logger.debug("Initializing Managers");
     const elementManager = new ElementManager(canvas);
     const connectionManager = new ConnectionManager(canvas, elementManager); // Pass elementManager reference
     const interactionManager = new InteractionManager(canvas, elementManager, connectionManager);
@@ -61,8 +66,7 @@ function initApp() {
     //     connectionManager,
     //     interactionManager
     // };
-
-    console.log('main.initApp Event modeling application initialized.');
+    logger.debug("Application Started")
 } 
 
 // --- Start Initialization ---

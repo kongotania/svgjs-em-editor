@@ -6,7 +6,9 @@
  */
 
 import { ELEMENT_TYPES } from './Element.js';
+import { createLogger } from './logger.js';
 
+const logger = createLogger("InteractionManager")
 /**
  * InteractionManager - Handles user interactions with the canvas and elements.
  * Manages selection, editing, context menus, panning, zoom, and drag/drop.
@@ -19,6 +21,7 @@ export class InteractionManager {
      * @param {ConnectionManager} connectionManager - The connection manager.
      */
     constructor(canvas, elementManager, connectionManager) {
+        logger.info(">Constructor")
         this.canvas = canvas;
         this.elementManager = elementManager;
         this.connectionManager = connectionManager;
@@ -39,7 +42,7 @@ export class InteractionManager {
         // References to context menus and context state
         this.elementContextMenu = document.getElementById('element-context-menu');
         if (!this.elementContextMenu) {
-            console.warn("Warning: 'element-context-menu' not found in the DOM.");
+            log.warn("Warning: 'element-context-menu' not found in the DOM.");
         }
         this.connectionContextMenu = document.getElementById('connection-context-menu');
         this.contextTargetConnection = null; // Store connection when its menu is shown
@@ -64,6 +67,7 @@ export class InteractionManager {
      * Initialize all event listeners for canvas, document, and UI controls.
      */
     initEvents() {
+        logger.info(">initEvents");
         // Canvas interaction listeners
         if (this.canvas?.node) {
             this.canvas.node.addEventListener('mousedown', this.handleCanvasMouseDown);
@@ -83,7 +87,7 @@ export class InteractionManager {
                 }
             });
         } else {
-            console.error("Canvas node is not initialized.");
+            log.error("Canvas node is not initialized.");
         }
 
         // Global keyboard listeners
@@ -92,6 +96,7 @@ export class InteractionManager {
 
         // Context menu actions for elements
         document.getElementById('ctx-el-delete')?.addEventListener('click', () => {
+            logger.info(">ctx-el-delete on click");
             // Cancel edit if active before deleting
             if (this.currentEditingDiv && this.selectedElement) {
                 this.cancelInlineEdit(false);
@@ -104,6 +109,7 @@ export class InteractionManager {
         });
 
         document.getElementById('ctx-el-connect')?.addEventListener('click', () => {
+            logger.info("ctx-el-connect on click");
             // Save edit if active before starting connection
             if (this.currentEditingDiv && this.selectedElement) {
                 this.handleSaveName(false);
@@ -115,6 +121,7 @@ export class InteractionManager {
         });
 
         document.getElementById('ctx-el-edit')?.addEventListener('click', () => {
+            logger.info("ctx-el-edit on click");
             if (this.selectedElement) {
                 this.showNameEditor(this.selectedElement);
             } else {
@@ -124,6 +131,7 @@ export class InteractionManager {
 
         // Context menu action for deleting a connection
         document.getElementById('ctx-conn-delete')?.addEventListener('click', () => {
+            logger.info("ctx-conn-delete on click");
             if (this.contextTargetConnection) {
                 this.connectionManager.removeConnection(this.contextTargetConnection);
                 this.hideAllContextMenus();
@@ -134,6 +142,7 @@ export class InteractionManager {
 
         // Helper for actions that should save edit, then deselect
         const globalUiActionHandler = () => {
+            logger.info(">globalUiActionHand")
             if (this.currentEditingDiv && this.selectedElement) {
                 this.handleSaveName(false);
                 this.selectElement(null);
@@ -144,18 +153,21 @@ export class InteractionManager {
 
         // Zoom controls using plugin
         document.getElementById('zoom-in')?.addEventListener('click', () => {
+            logger.info(">zoom-in on click")
             globalUiActionHandler();
             const currentZoom = this.canvas.zoom();
             this.canvas.zoom(currentZoom * 1.2);
         });
 
         document.getElementById('zoom-out')?.addEventListener('click', () => {
+            logger.info(">zoom-out on click")
             globalUiActionHandler();
             const currentZoom = this.canvas.zoom();
             this.canvas.zoom(currentZoom * 0.8);
         });
 
         document.getElementById('reset-view')?.addEventListener('click', () => {
+            logger.info(">reset-view on click")
             globalUiActionHandler();
             const drawingArea = document.getElementById('drawing-area');
             if (drawingArea) {
@@ -168,6 +180,7 @@ export class InteractionManager {
         const paletteItems = document.querySelectorAll('.palette-item');
         paletteItems.forEach(item => {
             item.addEventListener('dragstart', e => {
+                logger.info(`>dragstart element ${e}`);
                 globalUiActionHandler();
                 e.dataTransfer.setData('text/plain', item.dataset.type);
                 e.dataTransfer.effectAllowed = 'copy';
@@ -187,6 +200,7 @@ export class InteractionManager {
      * @param {MouseEvent} e
      */
     handleCanvasMouseDown(e) {
+        logger.info(">handleCanvasMouseDown",e);
         const target = e.target;
         const elementId = this.findElementId(target);
 
@@ -426,7 +440,7 @@ export class InteractionManager {
         const type = e.dataTransfer.getData('text/plain');
         // Validate dropped type
         if (!type || !ELEMENT_TYPES[type.toUpperCase().replace('-', '_')]) {
-            console.warn("Invalid type dropped:", type);
+            log.warn("Invalid type dropped:", type);
             return;
         }
         const point = this.getCanvasPoint(e.clientX, e.clientY);
@@ -436,7 +450,7 @@ export class InteractionManager {
             this.selectElement(element);
             this.showNameEditor(element);
         } else {
-            console.error("Failed to create element from drop.");
+            log.error("Failed to create element from drop.");
         }
     }
 
@@ -494,7 +508,7 @@ export class InteractionManager {
             this.elementContextMenu.style.display = 'block';
 
         } catch (err) {
-            console.error("Error calculating element context menu position:", err);
+            log.error("Error calculating element context menu position:", err);
             // Fallback: Show near element origin (less accurate)
             this.elementContextMenu.style.left = `${element.x + element.width}px`;
             this.elementContextMenu.style.top = `${element.y}px`;
@@ -550,25 +564,25 @@ export class InteractionManager {
             if (svgElem) {
                 svgElem.addClass('element-selected');
             } else {
-                console.warn("showNameEditor: SVG element not found for selection:", element.id);
+                log.warn("showNameEditor: SVG element not found for selection:", element.id);
             }
         }
 
         const svgGroup = this.canvas.findOne(`#${element.id}`);
         if (!svgGroup) {
-            console.error(`FAILED to find SVG Group for #${element.id}`);
+            log.error(`FAILED to find SVG Group for #${element.id}`);
             return;
         }
 
         const foreignObjectWrapper = svgGroup.findOne('.element-editor-fobj');
         if (!foreignObjectWrapper || !foreignObjectWrapper.node) {
-            console.error(`FAILED to find .element-editor-fobj or node inside #${element.id}`);
+            log.error(`FAILED to find .element-editor-fobj or node inside #${element.id}`);
             return;
         }
 
         const contentDivNode = foreignObjectWrapper.node.querySelector('div.element-content-div');
         if (!contentDivNode) {
-            console.error(`FAILED to find div.element-content-div using querySelector!`);
+            log.error(`FAILED to find div.element-content-div using querySelector!`);
             return;
         }
 
@@ -589,11 +603,11 @@ export class InteractionManager {
                     selection.removeAllRanges();
                     selection.addRange(range);
                 } else {
-                    console.error("contentDivNode or focus function missing!");
+                    log.error("contentDivNode or focus function missing!");
                 }
             }, 0);
         } catch (err) {
-            console.error("Focus/Select outer try/catch FAILED:", err);
+            log.error("Focus/Select outer try/catch FAILED:", err);
         }
 
         // Attach event listeners for editing
@@ -615,11 +629,11 @@ export class InteractionManager {
                         selection.removeAllRanges();
                         selection.addRange(range);
                     } else {
-                        console.warn("showNameEditor: Focus call did NOT result in contentDivNode being activeElement.");
+                        log.warn("showNameEditor: Focus call did NOT result in contentDivNode being activeElement.");
                     }
                 }
             }, 0);
-        } catch (err) { console.error("Focus/Select outer try/catch FAILED:", err); }
+        } catch (err) { log.error("Focus/Select outer try/catch FAILED:", err); }
 
         this.currentEditingDiv = contentDivNode;
     }
@@ -637,7 +651,7 @@ export class InteractionManager {
 
         const svgGroup = this.canvas.findOne(`#${element.id}`);
         if (!svgGroup) {
-            console.error("cancelInlineEdit: SVG group not found for", element.id);
+            log.error("cancelInlineEdit: SVG group not found for", element.id);
             this.currentEditingDiv = null;
             return;
         }
@@ -829,7 +843,7 @@ export class InteractionManager {
             const point = this.canvas.point(clientX, clientY);
             return { x: point.x, y: point.y };
         } catch (error) {
-            console.error("Error transforming screen point to SVG point:", error);
+            log.error("Error transforming screen point to SVG point:", error);
             return { x: 0, y: 0 };
         }
     }
