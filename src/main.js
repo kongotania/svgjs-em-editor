@@ -13,7 +13,13 @@ import { ElementManager } from './ElementManager.js';
 import { createLogger, setGlobalLogLevel } from './logger.js';
 
 const logger = createLogger("main")
-logger.setLevel(logger.levels.DEBUG);
+setGlobalLogLevel(logger.levels.WARN);
+
+/**
+ * Fallback dimensions for the SVG viewbox when #drawing-area has no size.
+ */
+const FALLBACK_VIEWBOX_WIDTH = 600;  // Chosen as a reasonable default canvas width
+const FALLBACK_VIEWBOX_HEIGHT = 400; // Chosen as a reasonable default canvas height
 
 /**
  * Initialize the application: setup SVG canvas, define global marker, create managers.
@@ -24,17 +30,22 @@ function initApp() {
         .panZoom({
             zoomMin: 0.2,
             zoomMax: 3,
-            zoomFactor:0.2 
+            zoomFactor: 0.2
         });
 
     // Set initial viewbox
     const drawingArea = document.getElementById('drawing-area');
     if (drawingArea) {
-        canvas.viewbox(0, 0, drawingArea.clientWidth || 600, drawingArea.clientHeight || 400); // Added fallback size
+        canvas.viewbox(
+            0,
+            0,
+            drawingArea.clientWidth || FALLBACK_VIEWBOX_WIDTH,
+            drawingArea.clientHeight || FALLBACK_VIEWBOX_HEIGHT
+        ); // Use fallback size if clientWidth/clientHeight are not set
     } else {
         // Stop initialization if container missing
         logger.error("#drawing-area element not found!");
-        return; 
+        return;
     }
 
     // --- Define Global Arrowhead Marker ---
@@ -53,7 +64,11 @@ function initApp() {
 
     // --- Instantiate Managers ---
     // Order: EM -> CM -> IM, then link IM back to EM if needed.
-    logger.debug("Initializing Managers");
+    // ElementManager (EM) must be created first as it manages the core SVG elements.
+    // ConnectionManager (CM) depends on EM to manage connections between elements.
+    // InteractionManager (IM) depends on both EM and CM to handle user interactions.
+    // Finally, EM is given a reference to IM if it needs to trigger or respond to interactions.
+    logger.info("Initializing Managers");
     const elementManager = new ElementManager(canvas);
     const connectionManager = new ConnectionManager(canvas, elementManager); // Pass elementManager reference
     const interactionManager = new InteractionManager(canvas, elementManager, connectionManager);
@@ -63,11 +78,8 @@ function initApp() {
     // window.app = {
     //     canvas,
     //     elementManager,
-    //     connectionManager,
-    //     interactionManager
-    // };
-    logger.debug("Application Started")
-} 
+    logger.info("Application Started.")
+}
 
 // --- Start Initialization ---
 // Wait for the DOM to be fully loaded before running initApp

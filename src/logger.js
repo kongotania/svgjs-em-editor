@@ -8,7 +8,7 @@ prefix.apply(log, {
   format(level, name, timestamp) {
     return `[${timestamp}] [${name}] ${level.toUpperCase()}:`;
   }
-}); 
+});
 
 // Global log level
 let globalLogLevel = log.levels.INFO;

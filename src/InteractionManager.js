@@ -1,5 +1,5 @@
 /**
- * interactions.js
+ * interactionManager.js
  *
  * Defines InteractionManager class to handle all user inputs:
  * drag/drop, mouse clicks, keyboard, context menu, zoom, inline editing.
@@ -121,7 +121,7 @@ export class InteractionManager {
         });
 
         document.getElementById('ctx-el-edit')?.addEventListener('click', () => {
-            logger.info("ctx-el-edit on click");
+            logger.info(">ctx-el-edit on click");
             if (this.selectedElement) {
                 this.showNameEditor(this.selectedElement);
             } else {
