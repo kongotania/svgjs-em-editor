@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Modeling Application</title>
-    
+
 </head>
 
 <body>
@@ -73,11 +73,18 @@
     <!-- Context menu for SELECTED CONNECTIONS -->
     <div id="connection-context-menu" class="context-menu" style="display: none;">
         <button id="ctx-conn-delete" class="context-menu-item">🗑️</button>
+        <button id="ctx-conn-edit" class="context-menu-item">🔧</button>
         <!-- Add more connection actions here later -->
     </div>
 
+    <!-- Context menu for SLICEs -->
+    <div id="slice-context-menu" class="context-menu" style="display: none;">
+        <button id="ctx-sl-delete" class="context-menu-item">🗑️</button>
+        <button id="ctx-sl-edit" class="context-menu-item">🔧</button>
+    </div>
+
     <!-- Load JavaScript files in correct order -->
-   
+
     <script type="module" src="/src/main.js"></script>
 </body>
 

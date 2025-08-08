@@ -42,7 +42,7 @@ export class InteractionManager {
         // References to context menus and context state
         this.elementContextMenu = document.getElementById('element-context-menu');
         if (!this.elementContextMenu) {
-            log.warn("Warning: 'element-context-menu' not found in the DOM.");
+            logger.warn("Warning: 'element-context-menu' not found in the DOM.");
         }
         this.connectionContextMenu = document.getElementById('connection-context-menu');
         this.contextTargetConnection = null; // Store connection when its menu is shown
@@ -87,7 +87,7 @@ export class InteractionManager {
                 }
             });
         } else {
-            log.error("Canvas node is not initialized.");
+            logger.error("Canvas node is not initialized.");
         }
 
         // Global keyboard listeners
@@ -95,6 +95,7 @@ export class InteractionManager {
         document.addEventListener('keyup', this.handleKeyUp);
 
         // Context menu actions for elements
+        // Delete Action 
         document.getElementById('ctx-el-delete')?.addEventListener('click', () => {
             logger.info(">ctx-el-delete on click");
             // Cancel edit if active before deleting
@@ -108,6 +109,7 @@ export class InteractionManager {
             }
         });
 
+        // Connect Action
         document.getElementById('ctx-el-connect')?.addEventListener('click', () => {
             logger.info("ctx-el-connect on click");
             // Save edit if active before starting connection
@@ -120,6 +122,7 @@ export class InteractionManager {
             this.hideAllContextMenus();
         });
 
+        // Edit Action 
         document.getElementById('ctx-el-edit')?.addEventListener('click', () => {
             logger.info(">ctx-el-edit on click");
             if (this.selectedElement) {
@@ -152,6 +155,7 @@ export class InteractionManager {
         };
 
         // Zoom controls using plugin
+        // Zoom in 
         document.getElementById('zoom-in')?.addEventListener('click', () => {
             logger.info(">zoom-in on click")
             globalUiActionHandler();
@@ -159,6 +163,7 @@ export class InteractionManager {
             this.canvas.zoom(currentZoom * 1.2);
         });
 
+        // Zoom Out 
         document.getElementById('zoom-out')?.addEventListener('click', () => {
             logger.info(">zoom-out on click")
             globalUiActionHandler();
@@ -166,6 +171,7 @@ export class InteractionManager {
             this.canvas.zoom(currentZoom * 0.8);
         });
 
+        // Zoom Reset 
         document.getElementById('reset-view')?.addEventListener('click', () => {
             logger.info(">reset-view on click")
             globalUiActionHandler();
@@ -192,6 +198,7 @@ export class InteractionManager {
             e.preventDefault(); // Necessary to allow drop
             e.dataTransfer.dropEffect = 'copy';
         });
+        
         this.canvas.node.addEventListener('drop', this.handleDrop);
     }
 
@@ -440,7 +447,7 @@ export class InteractionManager {
         const type = e.dataTransfer.getData('text/plain');
         // Validate dropped type
         if (!type || !ELEMENT_TYPES[type.toUpperCase().replace('-', '_')]) {
-            log.warn("Invalid type dropped:", type);
+            logger.warn("Invalid type dropped:", type);
             return;
         }
         const point = this.getCanvasPoint(e.clientX, e.clientY);
@@ -450,7 +457,7 @@ export class InteractionManager {
             this.selectElement(element);
             this.showNameEditor(element);
         } else {
-            log.error("Failed to create element from drop.");
+            logger.error("Failed to create element from drop.");
         }
     }
 
@@ -508,7 +515,7 @@ export class InteractionManager {
             this.elementContextMenu.style.display = 'block';
 
         } catch (err) {
-            log.error("Error calculating element context menu position:", err);
+            logger.error("Error calculating element context menu position:", err);
             // Fallback: Show near element origin (less accurate)
             this.elementContextMenu.style.left = `${element.x + element.width}px`;
             this.elementContextMenu.style.top = `${element.y}px`;
@@ -564,25 +571,25 @@ export class InteractionManager {
             if (svgElem) {
                 svgElem.addClass('element-selected');
             } else {
-                log.warn("showNameEditor: SVG element not found for selection:", element.id);
+                logger.warn("showNameEditor: SVG element not found for selection:", element.id);
             }
         }
 
         const svgGroup = this.canvas.findOne(`#${element.id}`);
         if (!svgGroup) {
-            log.error(`FAILED to find SVG Group for #${element.id}`);
+            logger.error(`FAILED to find SVG Group for #${element.id}`);
             return;
         }
 
         const foreignObjectWrapper = svgGroup.findOne('.element-editor-fobj');
         if (!foreignObjectWrapper || !foreignObjectWrapper.node) {
-            log.error(`FAILED to find .element-editor-fobj or node inside #${element.id}`);
+            logger.error(`FAILED to find .element-editor-fobj or node inside #${element.id}`);
             return;
         }
 
         const contentDivNode = foreignObjectWrapper.node.querySelector('div.element-content-div');
         if (!contentDivNode) {
-            log.error(`FAILED to find div.element-content-div using querySelector!`);
+            logger.error(`FAILED to find div.element-content-div using querySelector!`);
             return;
         }
 
@@ -603,11 +610,11 @@ export class InteractionManager {
                     selection.removeAllRanges();
                     selection.addRange(range);
                 } else {
-                    log.error("contentDivNode or focus function missing!");
+                    logger.error("contentDivNode or focus function missing!");
                 }
             }, 0);
         } catch (err) {
-            log.error("Focus/Select outer try/catch FAILED:", err);
+            logger.error("Focus/Select outer try/catch FAILED:", err);
         }
 
         // Attach event listeners for editing
@@ -629,11 +636,11 @@ export class InteractionManager {
                         selection.removeAllRanges();
                         selection.addRange(range);
                     } else {
-                        log.warn("showNameEditor: Focus call did NOT result in contentDivNode being activeElement.");
+                        logger.warn("showNameEditor: Focus call did NOT result in contentDivNode being activeElement.");
                     }
                 }
             }, 0);
-        } catch (err) { log.error("Focus/Select outer try/catch FAILED:", err); }
+        } catch (err) { logger.error("Focus/Select outer try/catch FAILED:", err); }
 
         this.currentEditingDiv = contentDivNode;
     }
@@ -651,7 +658,7 @@ export class InteractionManager {
 
         const svgGroup = this.canvas.findOne(`#${element.id}`);
         if (!svgGroup) {
-            log.error("cancelInlineEdit: SVG group not found for", element.id);
+            logger.error("cancelInlineEdit: SVG group not found for", element.id);
             this.currentEditingDiv = null;
             return;
         }
@@ -843,7 +850,7 @@ export class InteractionManager {
             const point = this.canvas.point(clientX, clientY);
             return { x: point.x, y: point.y };
         } catch (error) {
-            log.error("Error transforming screen point to SVG point:", error);
+            logger.error("Error transforming screen point to SVG point:", error);
             return { x: 0, y: 0 };
         }
     }

@@ -1,4 +1,4 @@
-let idCounter = 1; 
+// let idCounter = 1; 
 
 /**
  * Connection class - Represents a directed connection between two elements.
